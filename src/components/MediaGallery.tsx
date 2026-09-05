@@ -14,7 +14,7 @@ interface MediaGalleryProps {
  * Optimizes an uploaded image via HTML Canvas to avoid storing massive raw files
  * while preserving high fidelity and fast rendering.
  */
-async function compressImageFile(file: File, maxDimension: number = 1200): Promise<{ base64: string; mimeType: string }> {
+export async function compressImageFile(file: File, maxDimension: number = 1200): Promise<{ base64: string; mimeType: string }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -99,7 +99,7 @@ export function MediaGallery({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 pb-12">
       {/* Upload Zone & Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-stone-700 text-xs font-semibold">

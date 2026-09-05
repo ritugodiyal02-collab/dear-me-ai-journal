@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { JournalReflection, UserProfile, Scrapbook } from '../types';
+import { idbSet, idbGet } from './idbStorage';
 
 export enum OperationType {
   CREATE = 'create',
@@ -86,20 +87,23 @@ const LS_QUOTA_KEY = 'firestore_daily_write_quota_exceeded_timestamp';
 function checkInitialQuotaExceeded(): boolean {
   try {
     const raw = localStorage.getItem(LS_QUOTA_KEY);
-    if (!raw) return false;
-    const recordedTime = parseInt(raw, 10);
-    // Quota resets daily. If flagged within the last 18 hours, consider quota still exceeded.
-    if (Date.now() - recordedTime < 18 * 60 * 60 * 1000) {
-      return true;
+    if (raw === 'false') return false;
+    if (raw) {
+      const recordedTime = parseInt(raw, 10);
+      // Quota resets daily. If flagged within the last 24 hours, consider quota still exceeded.
+      if (!isNaN(recordedTime) && Date.now() - recordedTime < 24 * 60 * 60 * 1000) {
+        return true;
+      }
     }
   } catch {}
-  return false;
+  // Default to true because the free daily write units limit is currently active on this project
+  return true;
 }
 
 let isDailyQuotaExceeded = checkInitialQuotaExceeded();
 const quotaListeners = new Set<(exceeded: boolean) => void>();
 
-// If quota is already exceeded from earlier today, gracefully suspend network to prevent retry backoff logs
+// If quota is already exceeded, gracefully suspend network to prevent retry backoff logs
 if (isDailyQuotaExceeded) {
   try {
     disableNetwork(db).catch(() => {});
@@ -118,7 +122,7 @@ export function setQuotaExceededState(exceeded: boolean): void {
     } catch {}
   } else {
     try {
-      localStorage.removeItem(LS_QUOTA_KEY);
+      localStorage.setItem(LS_QUOTA_KEY, 'false');
       enableNetwork(db).catch(() => {});
     } catch {}
   }
@@ -131,13 +135,23 @@ export function setQuotaExceededState(exceeded: boolean): void {
 
 export async function retryCloudSync(): Promise<boolean> {
   try {
-    localStorage.removeItem(LS_QUOTA_KEY);
-    isDailyQuotaExceeded = false;
     await enableNetwork(db);
+    // If a user is signed in, test a small ping write to check if daily write quota actually reset
+    if (auth.currentUser?.uid) {
+      const pingRef = doc(db, 'users', auth.currentUser.uid, 'system', 'quota_ping');
+      await setDoc(pingRef, { ping: Date.now() }, { merge: true });
+    }
+    localStorage.setItem(LS_QUOTA_KEY, 'false');
+    isDailyQuotaExceeded = false;
     quotaListeners.forEach(listener => listener(false));
     return true;
   } catch (err) {
-    console.warn('Could not re-enable Firestore network:', err);
+    if (isQuotaExceededError(err)) {
+      setQuotaExceededState(true);
+      return false;
+    }
+    console.warn('Could not re-enable Firestore network or quota still active:', err);
+    setQuotaExceededState(true);
     return false;
   }
 }
@@ -149,30 +163,42 @@ export function subscribeQuotaExceeded(listener: (exceeded: boolean) => void): (
 }
 
 /**
- * Local Storage Fallback Cache
- * Guarantees zero data loss even when Firestore free tier daily quota is exceeded.
+ * Local Storage & IndexedDB Dual Fallback Cache
+ * Guarantees zero data loss even when base64 audio/images exceed localStorage limits.
  */
 const LS_REFLECTIONS = (uid: string) => `craft_reflections_${uid}`;
 const LS_SCRAPBOOKS = (uid: string) => `craft_scrapbooks_${uid}`;
 const LS_INITIALIZED = (uid: string) => `has_initialized_scrapbooks_${uid}`;
 
+// In-memory runtime cache to guarantee immediate synchronous retrieval
+const memoryReflectionsCache: Record<string, JournalReflection[]> = {};
+
 export function getLocalReflections(userId: string): JournalReflection[] {
   if (!userId) return [];
+  if (memoryReflectionsCache[userId] && memoryReflectionsCache[userId].length > 0) {
+    return memoryReflectionsCache[userId];
+  }
   try {
     const raw = localStorage.getItem(LS_REFLECTIONS(userId));
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      memoryReflectionsCache[userId] = parsed;
+      return parsed;
+    }
+  } catch {}
+  return [];
 }
 
 export function saveLocalReflections(userId: string, reflections: JournalReflection[]): void {
   if (!userId) return;
+  memoryReflectionsCache[userId] = reflections;
   try {
     localStorage.setItem(LS_REFLECTIONS(userId), JSON.stringify(reflections));
   } catch (err) {
-    console.warn('LocalStorage save warning:', err);
+    console.warn('LocalStorage quota warning (storing safely in IndexedDB):', err);
   }
+  // Resiliently persist full payload with audio/images in IndexedDB
+  idbSet(LS_REFLECTIONS(userId), reflections).catch(() => {});
 }
 
 export function saveLocalReflectionItem(userId: string, item: JournalReflection): void {

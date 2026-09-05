@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Sparkles, ShieldCheck, LogOut, Plus, BookOpen, PenLine, Layers, Compass, Cloud } from 'lucide-react';
+import { Sparkles, Lock, LogOut, Plus, BookOpen, PenLine, ChevronDown, Cloud } from 'lucide-react';
 
 interface NavbarProps {
   onNewEntry: () => void;
@@ -20,152 +20,161 @@ export function Navbar({
   onSwitchView
 }: NavbarProps) {
   const { currentUser, isGuest, signIn, signOut } = useAuth();
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
   const getInitials = (name?: string | null) => {
-    if (!name) return 'U';
+    if (!name) return 'R';
     return name.charAt(0).toUpperCase();
   };
 
+  const displayName = currentUser?.displayName || 'Ritu';
+
   return (
-    <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-stone-200 text-stone-800 transition-colors shadow-2xs">
-      <div className="w-full px-4 sm:px-6 lg:px-7 h-16 flex items-center justify-between">
+    <header className="sticky top-0 z-30 bg-[#f7f4ed] border-b border-[#e7e3d8] text-stone-800 transition-colors">
+      <div className="w-full px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         
-        {/* Brand */}
+        {/* Brand: Delicate Botanical Sprig + Dear Me + Subtitle */}
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-emerald-800 flex items-center justify-center text-white shadow-xs">
-            <Sparkles className="w-4 h-4 text-emerald-200" />
+          <div className="text-[#526e54] shrink-0">
+            <svg viewBox="0 0 24 24" className="w-6 h-6 fill-current" stroke="none">
+              <path d="M12 2C9 5 5 9 6 14c.5 2.5 2 4.5 4 5.5-1-2-1-4.5 0-6.5C11 10 13 8 16 6c-1.5 2.5-1.8 5-1 7 .8 2 2.5 3.5 4.5 4-1-3-1-6.5-1-9-3-2.5-5-4.5-6.5-6z" opacity="0.85" />
+              <path d="M7 17c1.5 1.5 3.5 2 5.5 1.5-1-1-1.5-2.2-1.5-3.5-2 .5-3.5 1-4 2z" opacity="0.6" />
+            </svg>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-serif-title font-bold text-base sm:text-lg tracking-tight text-stone-900">
-                My World
-              </span>
-              <span className="text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200/80">
-                GEMINI 3.6
-              </span>
-              {isGuest && (
-                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200" title="Saved safely in browser storage.">
-                  <Compass className="w-3 h-3 text-amber-600" />
-                  <span>Local Haven</span>
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-stone-500 hidden sm:block font-normal">
-              Welcome to your world • Personal journaling & AI reflection
-            </p>
+          <div className="flex items-baseline gap-3">
+            <span className="font-serif italic text-2xl font-medium text-stone-900 tracking-tight">
+              Dear Me
+            </span>
+            <span className="font-serif italic text-xs text-stone-400 font-normal hidden sm:inline-block">
+              A space for my thoughts, memories and more.
+            </span>
           </div>
         </div>
 
-        {/* Center Primary Nav Switcher (Reflections vs Scrapbooks) */}
+        {/* Center Primary Nav: Clean Underline Switcher */}
         {currentUser && (
-          <div className="flex items-center bg-stone-100 p-1 rounded-full border border-stone-200 shadow-2xs">
+          <div className="flex items-center gap-8 text-sm">
             <button
               onClick={() => onSwitchView('reflections')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center gap-2 pb-1 transition-all cursor-pointer ${
                 activeView === 'reflections'
-                  ? 'bg-white text-emerald-900 shadow-xs'
-                  : 'text-stone-600 hover:text-stone-900'
+                  ? 'text-[#2e3e30] border-b-2 border-[#3f5241] font-semibold'
+                  : 'text-stone-500 hover:text-stone-800 font-medium'
               }`}
             >
-              <PenLine className="w-3.5 h-3.5" />
+              <PenLine className="w-4 h-4" />
               <span>Reflections</span>
-              {savedCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-stone-100 text-stone-600 text-[10px]">
-                  {savedCount}
-                </span>
-              )}
             </button>
 
             <button
               onClick={() => onSwitchView('scrapbooks')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center gap-2 pb-1 transition-all cursor-pointer ${
                 activeView === 'scrapbooks'
-                  ? 'bg-white text-emerald-900 shadow-xs'
-                  : 'text-stone-600 hover:text-stone-900'
+                  ? 'text-[#2e3e30] border-b-2 border-[#3f5241] font-semibold'
+                  : 'text-stone-500 hover:text-stone-800 font-medium'
               }`}
             >
-              <BookOpen className="w-3.5 h-3.5" />
+              <BookOpen className="w-4 h-4" />
               <span>Scrapbooks</span>
-              {scrapbookCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-stone-100 text-stone-600 text-[10px]">
-                  {scrapbookCount}
-                </span>
-              )}
             </button>
           </div>
         )}
 
         {/* Right Actions */}
         {currentUser && (
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-3">
             {/* Connect Google Account button for guest users */}
             {isGuest && (
               <button
                 onClick={signIn}
                 title="Connect Google Account for Cloud Sync"
-                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 text-xs font-semibold transition-colors cursor-pointer"
+                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-stone-50 text-stone-700 border border-stone-200 text-xs font-medium transition-colors cursor-pointer shadow-2xs"
               >
                 <Cloud className="w-3.5 h-3.5 text-emerald-700" />
                 <span>Sync Cloud</span>
               </button>
             )}
 
-            {/* New Reflection Button */}
-            {activeView === 'reflections' ? (
+            {/* Single "+ New Reflection" Pill Button */}
+            {activeView === 'reflections' && (
               <button
                 id="nav-new-entry-btn"
                 onClick={onNewEntry}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-emerald-800 hover:bg-emerald-900 active:bg-emerald-950 text-white text-xs font-semibold shadow-xs hover:shadow-md transition-all cursor-pointer"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#3f5241] hover:bg-[#344536] active:bg-[#2b392d] text-white text-xs font-semibold shadow-2xs transition-all cursor-pointer"
               >
-                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                 <span>New Reflection</span>
               </button>
-            ) : null}
+            )}
 
             {/* Private & Encrypted Badge / Button */}
             <button
               id="nav-security-btn"
               onClick={onOpenSecurity}
               title="View Security & Firestore Isolation Architecture"
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 text-xs font-medium shadow-2xs transition-all cursor-pointer"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-stone-50 border border-stone-200/90 text-stone-600 text-xs font-medium shadow-2xs transition-all cursor-pointer"
             >
-              <ShieldCheck className="w-4 h-4 text-emerald-700" />
-              <span className="hidden lg:inline">Private & Encrypted</span>
+              <Lock className="w-3.5 h-3.5 text-stone-500" />
+              <span>Private & Encrypted</span>
             </button>
 
             {/* User Profile Pill */}
-            <div className="flex items-center gap-2.5 pl-1.5">
-              {currentUser.photoURL ? (
-                <img
-                  src={currentUser.photoURL}
-                  alt={currentUser.displayName || 'User'}
-                  className="w-8 h-8 rounded-full border border-stone-300 shadow-2xs object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-purple-700 text-white flex items-center justify-center text-xs font-bold shadow-2xs">
-                  {getInitials(currentUser.displayName || currentUser.email)}
+            <div className="relative">
+              <button
+                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                className="flex items-center gap-2 pl-1 py-1 pr-2 rounded-full hover:bg-stone-200/50 transition-colors cursor-pointer"
+              >
+                <div className="w-7 h-7 rounded-full bg-[#86608e] text-white flex items-center justify-center text-xs font-bold font-serif shadow-2xs">
+                  {getInitials(displayName)}
+                </div>
+                <span className="text-xs font-semibold text-stone-800">
+                  {displayName.split(' ')[0]}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-stone-500" />
+              </button>
+
+              {/* User Dropdown */}
+              {isUserMenuOpen && (
+                <div className="absolute right-0 top-10 z-50 bg-white border border-stone-200 rounded-xl shadow-lg py-1.5 w-40 text-xs animate-in fade-in zoom-in-95 duration-100">
+                  <div className="px-3 py-1.5 border-b border-stone-100 text-stone-500 text-[11px]">
+                    Signed in as <span className="font-semibold text-stone-800">{displayName}</span>
+                  </div>
+                  {isGuest && (
+                    <button
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        signIn();
+                      }}
+                      className="w-full px-3 py-1.5 text-left text-emerald-800 hover:bg-emerald-50 flex items-center gap-2 cursor-pointer font-medium"
+                    >
+                      <Cloud className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>Connect Google</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      onOpenSecurity();
+                    }}
+                    className="w-full px-3 py-1.5 text-left text-stone-700 hover:bg-stone-50 flex items-center gap-2 cursor-pointer"
+                  >
+                    <Lock className="w-3.5 h-3.5 text-stone-500" />
+                    <span>Privacy Details</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      signOut();
+                    }}
+                    className="w-full px-3 py-1.5 text-left text-rose-600 hover:bg-rose-50 flex items-center gap-2 cursor-pointer border-t border-stone-100"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Sign Out</span>
+                  </button>
                 </div>
               )}
-              <div className="hidden xl:block text-left">
-                <p className="text-xs font-bold text-stone-900 leading-tight truncate max-w-[120px]">
-                  {currentUser.displayName || 'Ritu'}
-                </p>
-                <p className="text-[10px] text-emerald-700 font-semibold leading-tight">
-                  {savedCount} {savedCount === 1 ? 'entry' : 'entries'}
-                </p>
-              </div>
             </div>
 
-            {/* Logout */}
-            <button
-              id="nav-sign-out-btn"
-              onClick={signOut}
-              title="Sign Out"
-              className="p-2 rounded-xl text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors cursor-pointer"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
           </div>
         )}
       </div>

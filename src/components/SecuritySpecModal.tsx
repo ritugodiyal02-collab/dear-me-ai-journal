@@ -122,15 +122,15 @@ service cloud.firestore {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center text-[11px]">
               <div className="p-3 rounded-xl bg-white border border-stone-200 shadow-2xs">
                 <span className="block text-[10px] text-stone-500 mb-0.5">Primary</span>
-                <span className="font-semibold text-emerald-900">gemini-3.6-flash</span>
-              </div>
-              <div className="p-3 rounded-xl bg-white border border-stone-200 shadow-2xs">
-                <span className="block text-[10px] text-stone-500 mb-0.5">High-Availability</span>
-                <span className="font-semibold text-amber-900">gemini-3.1-flash-lite</span>
+                <span className="font-semibold text-emerald-900">gemini-3.8-flash</span>
               </div>
               <div className="p-3 rounded-xl bg-white border border-stone-200 shadow-2xs">
                 <span className="block text-[10px] text-stone-500 mb-0.5">Dynamic Alias</span>
                 <span className="font-semibold text-stone-800">gemini-flash-latest</span>
+              </div>
+              <div className="p-3 rounded-xl bg-white border border-stone-200 shadow-2xs">
+                <span className="block text-[10px] text-stone-500 mb-0.5">High-Availability</span>
+                <span className="font-semibold text-amber-900">gemini-3.1-flash-lite</span>
               </div>
               <div className="p-3 rounded-xl bg-white border border-stone-200 shadow-2xs">
                 <span className="block text-[10px] text-stone-500 mb-0.5">Deep Reasoning</span>

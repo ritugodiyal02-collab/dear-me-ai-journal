@@ -20,9 +20,31 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 const MODEL_FALLBACK_LADDER = [
   'gemini-3.6-flash',
   'gemini-3.1-flash-lite',
-  'gemini-flash-latest',
-  'gemini-3.7-flash'
+  'gemini-3.7-flash',
+  'gemini-flash-latest'
 ] as const;
+
+// Transient cooldown tracking for temporarily degraded models (e.g. 503 high demand or 429 rate limit)
+const modelCooldownMap = new Map<string, number>();
+const COOLDOWN_DURATION_MS = 60000; // 60s cooldown before retrying degraded model as first choice
+
+function getOrderedModelCandidates(): string[] {
+  const now = Date.now();
+  const available: string[] = [];
+  const inCooldown: string[] = [];
+
+  for (const model of MODEL_FALLBACK_LADDER) {
+    const cooldownUntil = modelCooldownMap.get(model) || 0;
+    if (now < cooldownUntil) {
+      inCooldown.push(model);
+    } else {
+      available.push(model);
+    }
+  }
+
+  // Place active/healthy models first, followed by recovering models
+  return [...available, ...inCooldown];
+}
 
 let genAIClient: GoogleGenAI | null = null;
 
@@ -59,10 +81,11 @@ async function generateWithFallbackLadder(
   temperature: number = 0.7
 ): Promise<FallbackResult> {
   const ai = getGenAI();
-  const errors: Array<{ model: string; error: string }> = [];
+  const candidateModels = getOrderedModelCandidates();
+  const errors: Array<{ model: string; error: string; status?: any }> = [];
 
-  for (let i = 0; i < MODEL_FALLBACK_LADDER.length; i++) {
-    const model = MODEL_FALLBACK_LADDER[i];
+  for (let i = 0; i < candidateModels.length; i++) {
+    const model = candidateModels[i];
     try {
       const response = await ai.models.generateContent({
         model,
@@ -75,6 +98,8 @@ async function generateWithFallbackLadder(
 
       const text = response.text || '';
       if (text) {
+        // Success: clear cooldown if previously marked
+        modelCooldownMap.delete(model);
         return {
           text,
           modelUsed: model,
@@ -83,11 +108,17 @@ async function generateWithFallbackLadder(
       }
     } catch (err: any) {
       const errMsg = err?.message || String(err);
-      const status = err?.status || err?.statusCode || '';
-      console.warn(`[Gemini Fallback] Model ${model} failed (Status: ${status}): ${errMsg}. Attempting next model...`);
-      errors.push({ model, error: errMsg });
+      const status = err?.status || err?.statusCode || (errMsg.includes('503') ? 503 : (errMsg.includes('429') ? 429 : ''));
 
-      if (i === MODEL_FALLBACK_LADDER.length - 1) {
+      // If temporary high demand (503) or rate-limit (429), place on temporary circuit-breaker cooldown
+      if (status === 503 || status === '503' || status === 429 || status === '429' || errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE')) {
+        modelCooldownMap.set(model, Date.now() + COOLDOWN_DURATION_MS);
+      }
+
+      console.info(`[Gemini Fallback] Model ${model} unavailable (Status: ${status || 'ERR'}). Proceeding to next candidate in ladder...`);
+      errors.push({ model, error: errMsg, status });
+
+      if (i === candidateModels.length - 1) {
         throw new Error(`All Gemini models in fallback ladder failed. Details: ${JSON.stringify(errors)}`);
       }
     }
@@ -287,48 +318,41 @@ app.post('/api/gemini/transcribe', async (req: Request, res: Response) => {
 
     const ai = getGenAI();
 
-    // Try gemini-3.5-transcribe first, fallback to gemini-3.7-flash
+    // Try gemini-3.5-transcribe first, fallback to gemini-3.8-flash, then gemini-3.7-flash
     let transcriptText = '';
-    let modelUsed = 'gemini-3.5-transcribe';
+    let modelUsed = 'gemini-3.6-flash';
 
-    try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.5-transcribe',
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                mimeType,
-                data: audioData
+    const transcribeModels = ['gemini-3.6-flash', 'gemini-3.1-flash-lite', 'gemini-3.7-flash'] as const;
+    for (let i = 0; i < transcribeModels.length; i++) {
+      const candidate = transcribeModels[i];
+      try {
+        const response = await ai.models.generateContent({
+          model: candidate,
+          contents: {
+            parts: [
+              {
+                inlineData: {
+                  mimeType,
+                  data: audioData
+                }
+              },
+              {
+                text: 'Transcribe this spoken personal journal reflection word-for-word with natural punctuation and capitalization. Output ONLY the transcription text.'
               }
-            },
-            {
-              text: 'Transcribe this spoken personal journal reflection word-for-word with natural punctuation and capitalization.'
-            }
-          ]
+            ]
+          }
+        });
+        transcriptText = response.text || '';
+        if (transcriptText) {
+          modelUsed = candidate;
+          break;
         }
-      });
-      transcriptText = response.text || '';
-    } catch (e: any) {
-      console.warn('gemini-3.5-transcribe error, falling back to gemini-3.7-flash:', e?.message);
-      modelUsed = 'gemini-3.7-flash';
-      const fallbackResponse = await ai.models.generateContent({
-        model: 'gemini-3.7-flash',
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                mimeType,
-                data: audioData
-              }
-            },
-            {
-              text: 'Transcribe this spoken audio reflection faithfully into written text. Output ONLY the transcription.'
-            }
-          ]
+      } catch (err: any) {
+        console.info(`[Transcribe Fallback] Model ${candidate} unavailable: ${err?.message || err}. Trying next...`);
+        if (i === transcribeModels.length - 1) {
+          throw err;
         }
-      });
-      transcriptText = fallbackResponse.text || '';
+      }
     }
 
     res.json({
@@ -346,20 +370,33 @@ app.post('/api/gemini/transcribe', async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/gemini/create-story
+ * POST /api/gemini/create-story & /api/ai/story-generation
  * Generates an editable, structured Scrapbook Story draft from journal reflection content and photos.
  */
-app.post('/api/gemini/create-story', async (req: Request, res: Response) => {
+const handleCreateStoryRequest = async (req: Request, res: Response) => {
   try {
     const body = (req.body && typeof req.body === 'object') ? req.body : {};
-    const journalText = typeof body.journalText === 'string' ? body.journalText.trim() : '';
-    const reflectionSummary = typeof body.reflectionSummary === 'string' ? body.reflectionSummary : '';
+    const journalText = typeof body.journalText === 'string'
+      ? body.journalText.trim()
+      : typeof body.content === 'string'
+      ? body.content.trim()
+      : '';
+    const storyTitle = typeof body.title === 'string' ? body.title.trim() : '';
+    const reflectionSummary = typeof body.reflectionSummary === 'string'
+      ? body.reflectionSummary.trim()
+      : typeof body.summary === 'string'
+      ? body.summary.trim()
+      : '';
     const images = Array.isArray(body.images) ? body.images : [];
-    const audioTranscripts = Array.isArray(body.audioTranscripts) ? body.audioTranscripts : [];
+    const audioTranscripts = Array.isArray(body.audioTranscripts)
+      ? body.audioTranscripts
+      : Array.isArray(body.audioNotes)
+      ? body.audioNotes.map((a: any) => a.transcript).filter(Boolean)
+      : [];
     const userInstructions = typeof body.userInstructions === 'string' ? body.userInstructions.trim() : '';
     const theme = body.theme || 'parchment';
 
-    if (!journalText && images.length === 0 && audioTranscripts.length === 0) {
+    if (!journalText && !storyTitle && images.length === 0 && audioTranscripts.length === 0) {
       res.status(400).json({ success: false, error: 'Journal reflection or images required to generate a story.' });
       return;
     }
@@ -373,8 +410,9 @@ app.post('/api/gemini/create-story', async (req: Request, res: Response) => {
 
     const promptContext = `
 [User's Journal Content]:
-${journalText}
+${journalText || storyTitle || 'Moments captured in quiet reflection.'}
 
+${storyTitle ? `[Journal Title]: ${storyTitle}\n` : ''}
 ${reflectionSummary ? `[Gemini Synthesis / Key Takeaways]:\n${reflectionSummary}\n` : ''}
 ${audioTranscripts.length > 0 ? `[Spoken Reflections]:\n${audioTranscripts.join('\n')}\n` : ''}
 ${photosContext ? `[Attached Photos (${images.length})]:\n${photosContext}\n` : ''}
@@ -432,7 +470,7 @@ Do NOT include markdown backticks around the JSON.`;
       parsed = JSON.parse(cleanJson);
     } catch {
       parsed = {
-        title: "Memories & Reflections",
+        title: storyTitle || "Memories & Reflections",
         subtitle: "A personal story captured in time",
         introduction: journalText.slice(0, 180) || "Moments that shaped the journey.",
         theme,
@@ -440,7 +478,7 @@ Do NOT include markdown backticks around the JSON.`;
           {
             heading: "The Experience",
             narrative: journalText || "A meaningful memory preserved.",
-            quote: "Every moment holds a quiet lesson.",
+            quote: reflectionSummary || "Every moment holds a quiet lesson.",
             transition: "Looking ahead with clarity.",
             photoIndices: images.map((_, i) => i),
             photoCaptions: images.map((img: any) => img.caption || "A captured moment"),
@@ -462,7 +500,10 @@ Do NOT include markdown backticks around the JSON.`;
       error: error?.message || 'Failed to create scrapbook story'
     });
   }
-});
+};
+
+app.post('/api/gemini/create-story', handleCreateStoryRequest);
+app.post('/api/ai/story-generation', handleCreateStoryRequest);
 
 /**
  * POST /api/gemini/enhance-caption

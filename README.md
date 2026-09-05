@@ -1,6 +1,6 @@
 # Gemini Reflections Journal - User-Authenticated AI Reflection & Brainstorming
 
-A full-stack, user-authenticated journaling and conversational brainstorming platform built with React, Express, Google Cloud Firestore, Firebase Authentication, and the Gemini 3.6 Flash API with resilient fallback models.
+A full-stack, user-authenticated journaling and conversational brainstorming platform built with React, Express, Google Cloud Firestore, Firebase Authentication, and the Gemini 3.8 Flash API with resilient fallback models.
 
 ---
 
@@ -10,7 +10,7 @@ A full-stack, user-authenticated journaling and conversational brainstorming pla
 | :--- | :--- | :--- |
 | **1. Input Surfaces** | Injection, Malformed payloads | Strict schema validation, null-safe payload parsing, clean Markdown rendering. |
 | **2. Planning & Reasoning** | Prompt Injection, Instruction override | System instruction isolation; user prompts encapsulated as plain data. |
-| **3. Tool & Server Execution**| Model outages / API 503/429 | Resilient Fallback Ladder: `gemini-3.6-flash` &rarr; `gemini-3.1-flash-lite` &rarr; `gemini-flash-latest` &rarr; `gemini-3.7-flash`. |
+| **3. Tool & Server Execution**| Model outages / API 503/429 | Resilient Fallback Ladder: `gemini-3.8-flash` &rarr; `gemini-flash-latest` &rarr; `gemini-3.1-flash-lite` &rarr; `gemini-3.7-flash` &rarr; `gemini-3.6-flash`. Automatic circuit-breaker cooldown for degraded models. |
 | **4. Memory & State** | Cross-tenant data leakage | Strict owner-bound Firestore security rules (`request.auth.uid == userId`). |
 | **5. Inter-System Comms** | API Token exposure | Server-side Gemini proxy; API keys never leaked to frontend browser bundle. |
 

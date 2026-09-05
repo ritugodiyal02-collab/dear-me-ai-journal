@@ -9,8 +9,13 @@ import {
   onAuthStateChanged,
   User as FirebaseUser
 } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, setLogLevel } from 'firebase/firestore';
 import firebaseConfigJson from '../../firebase-applet-config.json';
+
+// Silence internal Firestore SDK retry and backoff logs in console
+try {
+  setLogLevel('silent');
+} catch {}
 
 const firebaseConfig = {
   apiKey: firebaseConfigJson.apiKey,

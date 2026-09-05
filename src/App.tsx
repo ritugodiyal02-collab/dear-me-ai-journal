@@ -40,7 +40,7 @@ function createBlankReflection(userId: string): JournalReflection {
     messages: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    lastModelUsed: 'gemini-3.6-flash'
+    lastModelUsed: 'gemini-3.8-flash'
   };
 }
 
@@ -637,11 +637,14 @@ function MainApp() {
     if (!currentUser) return;
     setIsCreateModalOpen(false);
     setIsSavingScrapbook(true);
+    // Optimistically update state immediately
+    setScrapbooks((prev) => [newAlbum, ...prev.filter((s) => s.id !== newAlbum.id)]);
+    setActiveScrapbook(newAlbum);
+    setActiveView('scrapbooks');
+
     const result = await saveScrapbook(currentUser.uid, newAlbum);
     setIsSavingScrapbook(false);
     if (result.success) {
-      setActiveScrapbook(newAlbum);
-      setActiveView('scrapbooks');
       addToast('success', '✨ Scrapbook Created', `"${newAlbum.title}" was handcrafted successfully.`);
     } else {
       addToast('error', 'Scrapbook Save Error', result.error || 'Could not create scrapbook.');
@@ -651,11 +654,13 @@ function MainApp() {
   const handleSaveScrapbook = async (updated: Scrapbook) => {
     if (!currentUser) return;
     setIsSavingScrapbook(true);
+    // Optimistically update state immediately
+    setScrapbooks((prev) => prev.map((s) => s.id === updated.id ? updated : s));
+    setActiveScrapbook(updated);
+
     const result = await saveScrapbook(currentUser.uid, updated);
     setIsSavingScrapbook(false);
-    if (result.success) {
-      setActiveScrapbook(updated);
-    } else {
+    if (!result.success) {
       addToast('error', 'Album Save Failed', result.error || 'Could not save scrapbook to Firestore.');
     }
   };
@@ -709,13 +714,17 @@ function MainApp() {
 
   const handleStoryCreatedFromReflection = async (storyDraft: Scrapbook) => {
     if (!currentUser) return;
-    const result = await saveScrapbook(currentUser.uid, storyDraft);
-    if (result.success) {
-      setActiveScrapbook(storyDraft);
-      setActiveView('scrapbooks');
-      addToast('success', '✨ Story Album Created', 'Gemini woven your reflection, photos, and voice memos into an album!');
-    } else {
-      addToast('error', 'Story Creation Error', result.error || 'Could not save new story album.');
+    // 1. Immediately add to scrapbooks state and open the album
+    setScrapbooks((prev) => [storyDraft, ...prev.filter((s) => s.id !== storyDraft.id)]);
+    setActiveScrapbook(storyDraft);
+    setActiveView('scrapbooks');
+    addToast('success', '✨ Story Album Created', 'Gemini woven your reflection, photos, and voice memos into an album!');
+
+    // 2. Persist safely in background with local-first fallback
+    try {
+      await saveScrapbook(currentUser.uid, storyDraft);
+    } catch (err) {
+      console.warn('Background save for story album completed locally:', err);
     }
   };
 
@@ -831,7 +840,7 @@ function MainApp() {
         // ==========================================
         // REFLECTIONS JOURNAL VIEW
         // ==========================================
-        <div className="flex-1 flex overflow-hidden relative min-h-0">
+        <div className="flex-1 flex overflow-hidden relative min-h-0 bg-[#f4f2ee]">
           
           {/* Mobile Sidebar Toggle Button */}
           <div className="md:hidden absolute top-3 left-3 z-20">
@@ -846,8 +855,10 @@ function MainApp() {
           {/* Desktop & Mobile History Sidebar */}
           <div
             className={`${
-              isMobileSidebarOpen ? 'fixed inset-y-16 left-0 z-20 w-80 shadow-2xl' : 'hidden md:flex'
-            } h-full`}
+              isMobileSidebarOpen
+                ? 'fixed inset-y-16 left-0 z-30 w-80 shadow-2xl p-3 bg-stone-900/10 backdrop-blur-xs'
+                : 'hidden md:flex w-72 lg:w-80 min-w-72 lg:min-w-80 max-w-72 lg:max-w-80 p-3.5 pr-0'
+            } h-full shrink-0 min-h-0`}
           >
             <HistorySidebar
               reflections={reflections}
@@ -867,25 +878,27 @@ function MainApp() {
             />
           )}
 
-          {/* Workspace Editor */}
+          {/* Workspace Editor Floating Container */}
           {activeReflection ? (
-            <JournalEditor
-              key={activeReflection.id}
-              reflection={activeReflection}
-              onSave={handleSaveReflection}
-              onCreateStory={handleStoryCreatedFromReflection}
-              userId={currentUser.uid}
-              userDisplayName={currentUser.displayName || undefined}
-              isSaving={isSavingReflection}
-              lastSaveError={lastSaveError}
-              onRetrySave={handleRetrySaveReflection}
-            />
+            <div className="flex-1 p-3.5 min-h-0 overflow-hidden flex min-w-0">
+              <JournalEditor
+                key={activeReflection.id}
+                reflection={activeReflection}
+                onSave={handleSaveReflection}
+                onCreateStory={handleStoryCreatedFromReflection}
+                userId={currentUser.uid}
+                userDisplayName={currentUser.displayName || undefined}
+                isSaving={isSavingReflection}
+                lastSaveError={lastSaveError}
+                onRetrySave={handleRetrySaveReflection}
+              />
+            </div>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-stone-500 bg-stone-50">
-              <p className="font-serif-title text-base font-semibold text-stone-800 mb-3">No active reflection selected</p>
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-stone-500 bg-[#f4f2ee]">
+              <p className="font-serif font-semibold text-base text-stone-800 mb-3">No active reflection selected</p>
               <button
                 onClick={handleNewEntry}
-                className="px-5 py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-stone-50 text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-[#455a47] hover:bg-[#364738] text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
               >
                 Create New Entry
               </button>

@@ -1,20 +1,12 @@
 import React, { useState } from 'react';
-import { JournalReflection, AIMode } from '../types';
+import { JournalReflection } from '../types';
 import { 
   Search, 
   Trash2, 
-  BookMarked, 
-  Compass, 
-  Lightbulb, 
-  ListChecks, 
-  Sparkles,
-  MessageCircle,
-  Coffee,
-  Bookmark,
-  MoreVertical,
-  Plus,
-  Shield,
-  SlidersHorizontal
+  Bookmark, 
+  MoreVertical, 
+  X,
+  BookOpen
 } from 'lucide-react';
 
 interface HistorySidebarProps {
@@ -31,252 +23,201 @@ export function HistorySidebar({
   selectedId,
   onSelect,
   onDelete,
-  onNewEntry,
   isLoading
 }: HistorySidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'all' | 'reflections' | 'plans' | 'insights'>('all');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 
-  // Filter reflections based on search and active tab filter
+  // Filter reflections based on search
   const filtered = reflections.filter((r) => {
-    const matchesSearch =
-      r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (r.summary && r.summary.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (r.tags && r.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase())));
-
-    if (!matchesSearch) return false;
-
-    if (activeFilter === 'reflections') {
-      return r.mode === 'reflect' || !r.mode;
-    }
-    if (activeFilter === 'plans') {
-      return r.mode === 'action_plan' || (r.actionItems && r.actionItems.length > 0);
-    }
-    if (activeFilter === 'insights') {
-      return (r.keyInsights && r.keyInsights.length > 0) || r.mode === 'summarize' || r.mode === 'brainstorm';
-    }
-
-    return true;
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      r.title.toLowerCase().includes(query) ||
+      r.content.toLowerCase().includes(query) ||
+      (r.summary && r.summary.toLowerCase().includes(query)) ||
+      (r.tags && r.tags.some(t => t.toLowerCase().includes(query)))
+    );
   });
-
-  const getModeBadge = (mode: AIMode) => {
-    switch (mode) {
-      case 'brainstorm':
-        return { 
-          label: 'Brainstorm', 
-          icon: Lightbulb, 
-          style: 'bg-amber-50 text-amber-900 border-amber-200' 
-        };
-      case 'summarize':
-        return { 
-          label: 'Summary', 
-          icon: Sparkles, 
-          style: 'bg-stone-100 text-stone-800 border-stone-200' 
-        };
-      case 'action_plan':
-        return { 
-          label: 'Action Plan', 
-          icon: ListChecks, 
-          style: 'bg-emerald-50 text-emerald-800 border-emerald-200/80' 
-        };
-      default:
-        return { 
-          label: 'Reflection', 
-          icon: Compass, 
-          style: 'bg-stone-100 text-stone-700 border-stone-200' 
-        };
-    }
-  };
 
   const formatDate = (timestamp: number) => {
     const d = new Date(timestamp);
-    const now = new Date();
-    const isToday = d.toDateString() === now.toDateString();
-    
-    if (isToday) {
-      return `Today at ${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}`;
-    }
-    return d.toLocaleDateString(undefined, {
+    return d.toLocaleDateString('en-GB', {
+      day: 'numeric',
       month: 'short',
-      day: 'numeric'
+      year: 'numeric'
     });
   };
 
+  const formatDay = (timestamp: number) => {
+    const d = new Date(timestamp);
+    return d.getDate().toString().padStart(2, '0');
+  };
+
+  const formatMonth = (timestamp: number) => {
+    const d = new Date(timestamp);
+    return d.toLocaleDateString('en-US', { month: 'short' });
+  };
+
   return (
-    <aside className="w-full md:w-80 lg:w-88 flex flex-col bg-stone-50/70 border-r border-stone-200 h-full text-stone-800 transition-colors">
+    <aside className="w-full h-full flex flex-col bg-white rounded-2xl border border-stone-200/80 shadow-2xs overflow-hidden text-stone-800 transition-all min-w-0">
       
-      {/* Header & Search */}
-      <div className="p-4 border-b border-stone-200 space-y-3 bg-white">
+      {/* Header: Title + Subtitle + Search Icon */}
+      <div className="p-4 border-b border-stone-100 bg-white min-w-0">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-stone-900">
-            <BookMarked className="w-4 h-4 text-emerald-700" />
-            <h3 className="font-serif-title font-bold text-sm">Past Reflections</h3>
-          </div>
-          <span className="text-xs text-stone-700 font-semibold px-2 py-0.5 rounded-full bg-stone-100 border border-stone-200">
-            {reflections.length}
-          </span>
-        </div>
-
-        {/* Pill Search Input */}
-        <div className="relative">
-          <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            id="history-search-input"
-            type="text"
-            placeholder="Search entries, tags, or insights..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-stone-50 border border-stone-200 rounded-full text-xs text-stone-900 placeholder-stone-400 focus:outline-none focus:border-emerald-700 focus:bg-white transition-all"
-          />
-        </div>
-
-        {/* Filter Chips row matching Mockup: All, Reflections, Plans, Insights */}
-        <div className="flex items-center justify-between gap-1 text-xs">
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
-            <button
-              onClick={() => setActiveFilter('all')}
-              className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors shrink-0 cursor-pointer ${
-                activeFilter === 'all'
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200/80'
-              }`}
-            >
-              All
-            </button>
-            <button
-              onClick={() => setActiveFilter('reflections')}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors shrink-0 cursor-pointer ${
-                activeFilter === 'reflections'
-                  ? 'bg-emerald-100 text-emerald-800 font-semibold'
-                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200/80'
-              }`}
-            >
-              Reflections
-            </button>
-            <button
-              onClick={() => setActiveFilter('plans')}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors shrink-0 cursor-pointer ${
-                activeFilter === 'plans'
-                  ? 'bg-emerald-100 text-emerald-800 font-semibold'
-                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200/80'
-              }`}
-            >
-              Plans
-            </button>
-            <button
-              onClick={() => setActiveFilter('insights')}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors shrink-0 cursor-pointer ${
-                activeFilter === 'insights'
-                  ? 'bg-emerald-100 text-emerald-800 font-semibold'
-                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200/80'
-              }`}
-            >
-              Insights
-            </button>
-          </div>
-          <button 
-            title="Filter options"
-            className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors"
+          <h3 className="font-serif font-bold text-base text-stone-900 tracking-tight truncate">
+            Past Reflections
+          </h3>
+          <button
+            onClick={() => setIsSearchOpen(!isSearchOpen)}
+            title="Search reflections"
+            className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-50 transition-colors cursor-pointer shrink-0"
           >
-            <SlidersHorizontal className="w-3.5 h-3.5" />
+            <Search className="w-4 h-4" />
           </button>
         </div>
+        <p className="text-xs text-stone-400 font-normal mt-0.5 truncate">
+          Your stories, always with you.
+        </p>
+
+        {/* Expandable Search Input */}
+        {isSearchOpen && (
+          <div className="relative mt-2.5 animate-in fade-in slide-in-from-top-1 duration-150">
+            <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              id="history-search-input"
+              type="text"
+              placeholder="Search reflections..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-7 py-1.5 bg-stone-50 border border-stone-200 rounded-lg text-xs text-stone-900 placeholder-stone-400 focus:outline-none focus:border-[#3f5241] focus:bg-white transition-all"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* List Container */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2.5 min-h-0">
+      {/* Reflections List */}
+      <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5 min-h-0 scrapbook-page-scroll min-w-0">
         {isLoading ? (
-          <div className="text-center py-12 text-stone-500 text-xs">
-            <div className="w-5 h-5 border-2 border-emerald-700 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-            Gathering your thoughts...
+          <div className="text-center py-12 text-stone-400 text-xs">
+            <div className="w-5 h-5 border-2 border-[#3f5241] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+            Loading reflections...
           </div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-12 px-4 text-stone-500">
-            <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 mx-auto mb-3">
-              <Coffee className="w-6 h-6 text-amber-600" />
+          <div className="text-center py-12 px-4 text-stone-400">
+            <div className="w-10 h-10 rounded-full bg-[#f7f4ed] border border-[#e7e3d8] flex items-center justify-center text-[#526e54] mx-auto mb-2">
+              <BookOpen className="w-5 h-5 opacity-70" />
             </div>
-            <p className="text-xs font-semibold text-stone-800">No reflections found</p>
-            <p className="text-[11px] text-stone-500 mt-1 max-w-[200px] mx-auto">
-              {searchQuery ? 'Try a different keyword' : 'Create your first journal entry to begin.'}
+            <p className="text-xs font-semibold text-stone-700">No reflections found</p>
+            <p className="text-[11px] text-stone-400 mt-1">
+              {searchQuery ? 'Try a different keyword' : 'Create your first reflection to begin.'}
             </p>
           </div>
         ) : (
           filtered.map((item) => {
             const isSelected = item.id === selectedId;
-            const badge = getModeBadge(item.mode);
-            const Icon = badge.icon;
-            const msgCount = item.messages?.length || 0;
+            const snippet = item.summary || item.content.replace(/^[#*\-\s]+/, '') || 'A quiet space for thought...';
 
             return (
               <div
                 key={item.id}
                 id={`history-item-${item.id}`}
                 onClick={() => onSelect(item)}
-                className={`group relative p-3.5 rounded-2xl border transition-all cursor-pointer text-left ${
+                className={`group relative flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer text-left w-full min-w-0 overflow-hidden ${
                   isSelected
-                    ? 'bg-white border-emerald-700/80 shadow-md ring-1 ring-emerald-700/20'
-                    : 'bg-white hover:bg-stone-50/80 border-stone-200 hover:border-stone-300 shadow-2xs'
+                    ? 'bg-[#edf3ec] border-[#d2dfd1] shadow-2xs'
+                    : 'bg-white hover:bg-[#faf9f5] border-stone-200/60 hover:border-stone-200 shadow-2xs'
                 }`}
               >
-                <div className="flex items-start justify-between gap-2 mb-1.5">
-                  <h4 className="font-serif-title text-sm font-bold text-stone-900 line-clamp-1 group-hover:text-emerald-900 transition-colors">
-                    {item.title || 'Untitled Reflection'}
-                  </h4>
-                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                    {isSelected && (
-                      <Bookmark className="w-3.5 h-3.5 text-emerald-700 fill-emerald-700" />
-                    )}
-                    <div className="relative">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setMenuOpenId(menuOpenId === item.id ? null : item.id);
-                        }}
-                        title="Options"
-                        className="p-1 rounded-md text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors cursor-pointer"
-                      >
-                        <MoreVertical className="w-3.5 h-3.5" />
-                      </button>
-
-                      {menuOpenId === item.id && (
-                        <div className="absolute right-0 top-6 z-30 bg-white border border-stone-200 rounded-xl shadow-lg py-1 w-28 text-xs">
-                          <button
-                            onClick={(e) => {
-                              setMenuOpenId(null);
-                              onDelete(item.id, e);
-                            }}
-                            className="w-full px-3 py-1.5 text-left text-rose-600 hover:bg-rose-50 flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>Delete</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <p className="text-[11px] text-stone-600 line-clamp-2 mb-2.5 leading-relaxed font-sans">
-                  {item.summary || item.content || 'Blank entry... write your thoughts'}
-                </p>
-
-                {/* Mode Pill Badge */}
-                <div className="mb-2">
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-medium ${badge.style}`}>
-                    <Icon className="w-2.5 h-2.5" />
-                    <span>{badge.label}</span>
+                {/* Calm Editorial Date Tile (replaces image thumbnail with clean journal typography) */}
+                <div
+                  className={`w-11 h-11 rounded-xl flex flex-col items-center justify-center shrink-0 border transition-all ${
+                    isSelected
+                      ? 'bg-white border-[#c9d8c8] text-[#2d3e30] shadow-2xs'
+                      : 'bg-[#f7f5ed] border-[#e8e4d8] text-stone-700 group-hover:bg-white group-hover:border-stone-200'
+                  }`}
+                >
+                  <span className="text-[9px] font-sans font-bold uppercase tracking-wider leading-none text-stone-400 group-hover:text-stone-500">
+                    {formatMonth(item.updatedAt || item.createdAt)}
+                  </span>
+                  <span className="text-sm font-serif font-bold leading-tight mt-0.5">
+                    {formatDay(item.updatedAt || item.createdAt)}
                   </span>
                 </div>
 
-                {/* Footer with Chat count and timestamp */}
-                <div className="flex items-center justify-between text-[10px] text-stone-400 pt-2 border-t border-stone-100">
-                  <div className="flex items-center gap-1 text-stone-500">
-                    <MessageCircle className="w-3 h-3 text-emerald-700" />
-                    <span className="font-semibold">{msgCount}</span>
+                {/* Info */}
+                <div className="flex-1 min-w-0 pr-1 overflow-hidden">
+                  <div className="flex items-center justify-between gap-1 min-w-0">
+                    <h4 className="font-serif font-bold text-xs sm:text-sm text-stone-900 group-hover:text-stone-950 truncate leading-snug">
+                      {item.title || 'Untitled Reflection'}
+                    </h4>
+
+                    <div className="shrink-0 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      {isSelected && (
+                        <Bookmark className="w-3.5 h-3.5 fill-[#3f5241] text-[#3f5241] shrink-0" />
+                      )}
+
+                      {/* Options Dropdown */}
+                      <div className="relative">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuOpenId(menuOpenId === item.id ? null : item.id);
+                          }}
+                          title="Options"
+                          className="p-1 rounded-md text-stone-300 hover:text-stone-600 hover:bg-stone-200/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                        >
+                          <MoreVertical className="w-3.5 h-3.5" />
+                        </button>
+
+                        {menuOpenId === item.id && (
+                          <div className="absolute right-0 top-6 z-30 bg-white border border-stone-200 rounded-xl shadow-lg py-1 w-28 text-xs animate-in fade-in duration-100">
+                            <button
+                              onClick={(e) => {
+                                setMenuOpenId(null);
+                                onDelete(item.id, e);
+                              }}
+                              className="w-full px-3 py-1.5 text-left text-rose-600 hover:bg-rose-50 flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <span>{formatDate(item.updatedAt)}</span>
+
+                  {/* Metadata: Date and optional Mode / Tags */}
+                  <p className="text-[11px] text-stone-400 font-normal leading-tight mt-0.5 truncate flex items-center gap-1">
+                    <span>{formatDate(item.updatedAt || item.createdAt)}</span>
+                    {item.mode && (
+                      <>
+                        <span>•</span>
+                        <span className="capitalize text-stone-500 font-medium">{item.mode.replace('_', ' ')}</span>
+                      </>
+                    )}
+                    {item.tags && item.tags.length > 0 && (
+                      <>
+                        <span>•</span>
+                        <span className="text-stone-500">#{item.tags[0]}</span>
+                      </>
+                    )}
+                  </p>
+
+                  {/* Single-line snippet with ellipsis */}
+                  <p className="text-[11px] text-stone-500 truncate leading-tight mt-1 font-normal block max-w-full">
+                    {snippet}
+                  </p>
                 </div>
               </div>
             );
@@ -284,40 +225,19 @@ export function HistorySidebar({
         )}
       </div>
 
-      {/* Bottom Promo & Privacy Section (Pinned at bottom of sidebar) */}
-      <div className="shrink-0 p-3.5 border-t border-stone-200 bg-white space-y-3">
-        {/* Start a new reflection card */}
-        <div className="p-3.5 rounded-2xl bg-stone-50/80 border border-stone-200/90 space-y-2">
-          <div className="flex items-start gap-2.5">
-            <div className="w-7 h-7 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
-              <Sparkles className="w-3.5 h-3.5" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-stone-900 leading-tight">Start a new reflection</p>
-              <p className="text-[11px] text-stone-500 leading-tight mt-0.5">
-                Capture your thoughts and get AI-powered insights.
-              </p>
-            </div>
-          </div>
-          {onNewEntry && (
-            <button
-              onClick={onNewEntry}
-              className="w-full py-1.5 px-3 rounded-full border border-emerald-600 hover:bg-emerald-50 text-emerald-700 font-semibold text-xs transition-colors flex items-center justify-center gap-1 cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>New Reflection</span>
-            </button>
-          )}
+      {/* Bottom Mindful Quote Card matching image.png */}
+      <div className="mt-auto p-3 m-2.5 rounded-xl bg-[#f7f5ed] border border-[#e8e4d8] flex items-center gap-2.5 shrink-0 min-w-0">
+        <div className="text-[#526e54] shrink-0">
+          <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current" stroke="none">
+            <path d="M12 2C9 5 5 9 6 14c.5 2.5 2 4.5 4 5.5-1-2-1-4.5 0-6.5C11 10 13 8 16 6c-1.5 2.5-1.8 5-1 7 .8 2 2.5 3.5 4.5 4-1-3-1-6.5-1-9-3-2.5-5-4.5-6.5-6z" opacity="0.85" />
+            <path d="M7 17c1.5 1.5 3.5 2 5.5 1.5-1-1-1.5-2.2-1.5-3.5-2 .5-3.5 1-4 2z" opacity="0.6" />
+          </svg>
         </div>
-
-        {/* Privacy note */}
-        <div className="flex items-start gap-2 text-[11px] text-stone-400 px-1">
-          <Shield className="w-3.5 h-3.5 text-emerald-700 shrink-0 mt-0.5" />
-          <p className="leading-tight">
-            Your reflections are private, encrypted, and only visible to you.
-          </p>
-        </div>
+        <p className="font-serif italic text-xs text-stone-600 leading-snug min-w-0 truncate">
+          &ldquo;A more mindful me, for a brighter tomorrow.&rdquo;
+        </p>
       </div>
+
     </aside>
   );
 }

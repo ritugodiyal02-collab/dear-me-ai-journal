@@ -137,13 +137,13 @@ export function ScrapbookGallery({
           </p>
         </div>
 
-        {/* "+ New Scrapbook" Terracotta / Rose Button */}
+        {/* "New Scrapbook" Terracotta / Rose Button */}
         <button
           onClick={onCreateNewScrapbook}
           className="flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-[#d97c7c] hover:bg-[#c96c6c] active:bg-[#b85e5e] text-white text-xs font-semibold shadow-md transition-all cursor-pointer hover:scale-103"
         >
           <Plus className="w-4 h-4 stroke-[2.5]" />
-          <span>+ New Scrapbook</span>
+          <span>New Scrapbook</span>
         </button>
       </div>
 
