@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Sparkles, ShieldCheck, LogOut, Plus, BookOpen, PenLine, Layers } from 'lucide-react';
+import { Sparkles, ShieldCheck, LogOut, Plus, BookOpen, PenLine, Layers, Compass, Cloud } from 'lucide-react';
 
 interface NavbarProps {
   onNewEntry: () => void;
@@ -19,7 +19,7 @@ export function Navbar({
   activeView,
   onSwitchView
 }: NavbarProps) {
-  const { currentUser, signOut } = useAuth();
+  const { currentUser, isGuest, signIn, signOut } = useAuth();
 
   const getInitials = (name?: string | null) => {
     if (!name) return 'U';
@@ -43,6 +43,12 @@ export function Navbar({
               <span className="text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200/80">
                 GEMINI 3.6
               </span>
+              {isGuest && (
+                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200" title="Saved safely in browser storage.">
+                  <Compass className="w-3 h-3 text-amber-600" />
+                  <span>Local Haven</span>
+                </span>
+              )}
             </div>
             <p className="text-[11px] text-stone-500 hidden sm:block font-normal">
               Welcome to your world • Personal journaling & AI reflection
@@ -92,6 +98,18 @@ export function Navbar({
         {/* Right Actions */}
         {currentUser && (
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* Connect Google Account button for guest users */}
+            {isGuest && (
+              <button
+                onClick={signIn}
+                title="Connect Google Account for Cloud Sync"
+                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                <Cloud className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Sync Cloud</span>
+              </button>
+            )}
+
             {/* New Reflection Button */}
             {activeView === 'reflections' ? (
               <button
@@ -154,3 +172,4 @@ export function Navbar({
     </header>
   );
 }
+

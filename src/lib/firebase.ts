@@ -4,6 +4,7 @@ import {
   GoogleAuthProvider, 
   signInWithPopup, 
   signInWithRedirect,
+  signInAnonymously,
   signOut as fbSignOut,
   onAuthStateChanged,
   User as FirebaseUser
@@ -39,11 +40,30 @@ export async function signInWithGoogle(): Promise<FirebaseUser> {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
   } catch (error: any) {
-    console.warn('Popup sign in failed, attempting redirect fallback:', error);
+    console.warn('Popup sign in failed:', error);
     if (error.code === 'auth/popup-blocked' || error.code === 'auth/cancelled-popup-request') {
       await signInWithRedirect(auth, googleProvider);
     }
+    if (error.code === 'auth/unauthorized-domain') {
+      const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+      error.domain = hostname;
+      error.projectId = firebaseConfig.projectId;
+    }
     throw error;
+  }
+}
+
+/**
+ * Attempts anonymous authentication via Firebase Auth.
+ * Returns the FirebaseUser if successful, or null if Anonymous provider is not enabled in console.
+ */
+export async function signInAsGuest(): Promise<FirebaseUser | null> {
+  try {
+    const result = await signInAnonymously(auth);
+    return result.user;
+  } catch (err) {
+    console.warn('Firebase anonymous auth not enabled or failed:', err);
+    return null;
   }
 }
 

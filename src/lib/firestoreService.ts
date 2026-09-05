@@ -260,8 +260,8 @@ export async function syncUserProfile(user: UserProfile): Promise<void> {
     localStorage.setItem(`user_profile_${user.uid}`, JSON.stringify(user));
   } catch {}
 
-  // If quota is exhausted, skip writing to avoid overloading backend
-  if (isDailyQuotaExceeded) return;
+  // If quota is already exhausted or unauthenticated guest mode, skip writing to avoid permission errors
+  if (isDailyQuotaExceeded || !auth.currentUser) return;
 
   const userRef = doc(db, 'users', user.uid);
   const data = cleanPayload({
@@ -296,7 +296,7 @@ export async function getUserProfile(userId: string): Promise<Record<string, any
     const localProfile = localRaw ? JSON.parse(localRaw) : null;
     const isLocalInit = localStorage.getItem(LS_INITIALIZED(userId)) === 'true';
 
-    if (isDailyQuotaExceeded) {
+    if (isDailyQuotaExceeded || !auth.currentUser) {
       return { ...localProfile, hasInitializedScrapbooks: isLocalInit };
     }
 
@@ -328,7 +328,7 @@ export async function markUserScrapbooksInitialized(userId: string): Promise<voi
   if (!userId) return;
   try {
     localStorage.setItem(LS_INITIALIZED(userId), 'true');
-    if (isDailyQuotaExceeded) return;
+    if (isDailyQuotaExceeded || !auth.currentUser) return;
 
     const userRef = doc(db, 'users', userId);
     await setDoc(userRef, { 
@@ -368,8 +368,8 @@ export async function saveReflection(
   // 1. Always save to local storage first (instant durability)
   saveLocalReflectionItem(userId, cleaned);
 
-  // 2. If quota is already exhausted, skip cloud network call to prevent backoff spam
-  if (isDailyQuotaExceeded) {
+  // 2. If quota is already exhausted or unauthenticated guest mode, return local fallback success
+  if (isDailyQuotaExceeded || !auth.currentUser) {
     return { success: true, id: reflection.id, isLocalFallback: true };
   }
 
@@ -416,8 +416,8 @@ export function subscribeUserReflections(
     onData(localItems);
   }
 
-  // If quota is already exceeded, don't attempt to open a listeners connection
-  if (isDailyQuotaExceeded) {
+  // If quota is already exceeded or unauthenticated guest mode, don't attempt to open a listeners connection
+  if (isDailyQuotaExceeded || !auth.currentUser) {
     return () => {};
   }
 
@@ -471,7 +471,7 @@ export async function deleteReflection(
   // Always delete locally
   deleteLocalReflectionItem(userId, reflectionId);
 
-  if (isDailyQuotaExceeded) {
+  if (isDailyQuotaExceeded || !auth.currentUser) {
     return { success: true };
   }
 
@@ -512,8 +512,8 @@ export async function saveScrapbook(
   // 1. Always save to local storage first (instant durability)
   saveLocalScrapbookItem(userId, cleaned);
 
-  // 2. If quota is already exhausted, skip cloud call
-  if (isDailyQuotaExceeded) {
+  // 2. If quota is already exhausted or unauthenticated guest mode, skip cloud call
+  if (isDailyQuotaExceeded || !auth.currentUser) {
     return { success: true, id: scrapbook.id, isLocalFallback: true };
   }
 
@@ -560,8 +560,8 @@ export function subscribeUserScrapbooks(
     onData(localBooks);
   }
 
-  // If quota is already exceeded, don't attempt to open a listeners connection
-  if (isDailyQuotaExceeded) {
+  // If quota is already exceeded or unauthenticated guest mode, don't attempt to open a listeners connection
+  if (isDailyQuotaExceeded || !auth.currentUser) {
     return () => {};
   }
 
@@ -613,7 +613,7 @@ export async function deleteScrapbook(
   // Always delete locally
   deleteLocalScrapbookItem(userId, scrapbookId);
 
-  if (isDailyQuotaExceeded) {
+  if (isDailyQuotaExceeded || !auth.currentUser) {
     return { success: true };
   }
 
@@ -642,7 +642,7 @@ export async function getScrapbook(userId: string, scrapbookId: string): Promise
   const found = localList.find(s => s.id === scrapbookId);
   if (found) return found;
 
-  if (isDailyQuotaExceeded) return null;
+  if (isDailyQuotaExceeded || !auth.currentUser) return null;
 
   try {
     const scrapbookRef = doc(db, 'users', userId, 'scrapbooks', scrapbookId);

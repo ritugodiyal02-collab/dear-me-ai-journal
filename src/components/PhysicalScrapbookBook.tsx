@@ -141,6 +141,8 @@ export function PhysicalScrapbookBook({
 
   // Fullscreen / Immersion mode
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [fullscreenTip, setFullscreenTip] = useState<string | null>(null);
+  const bookContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Chapter Manager Modal
   const [showChapterManager, setShowChapterManager] = useState<boolean>(false);
@@ -265,7 +267,33 @@ export function PhysicalScrapbookBook({
     setScrapbook(initialScrapbook);
   }, [initialScrapbook]);
 
-  // Keyboard navigation for page turning
+  // Synchronize state with browser native Fullscreen API changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isNativeFs = Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement);
+      setIsFullscreen(isNativeFs);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
+  // Show ephemeral tip when fullscreen is activated
+  useEffect(() => {
+    if (isFullscreen) {
+      setFullscreenTip('✨ Immersive Fullscreen Mode • Press Esc or click ⛶ to exit');
+      const timer = setTimeout(() => setFullscreenTip(null), 3500);
+      return () => clearTimeout(timer);
+    } else {
+      setFullscreenTip(null);
+    }
+  }, [isFullscreen]);
+
+  // Keyboard navigation for page turning & fullscreen escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
@@ -278,12 +306,52 @@ export function PhysicalScrapbookBook({
       } else if (e.key === 'Home') {
         setCurrentSpreadIndex(0);
       } else if (e.key === 'Escape') {
+        if (document.fullscreenElement || (document as any).webkitFullscreenElement) {
+          if (document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {});
+          } else if ((document as any).webkitExitFullscreen) {
+            (document as any).webkitExitFullscreen();
+          }
+        }
         if (isFullscreen) setIsFullscreen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [totalSpreads, isFullscreen]);
+
+  // Toggle fullscreen (combining HTML5 Fullscreen API with in-app maximized viewport fallback)
+  const toggleFullscreen = async () => {
+    try {
+      const isNativeFs = Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement);
+      if (!isNativeFs && !isFullscreen) {
+        const target = bookContainerRef.current || document.documentElement;
+        if (target.requestFullscreen) {
+          await target.requestFullscreen();
+        } else if ((target as any).webkitRequestFullscreen) {
+          await (target as any).webkitRequestFullscreen();
+        } else if ((target as any).msRequestFullscreen) {
+          await (target as any).msRequestFullscreen();
+        }
+        setIsFullscreen(true);
+      } else {
+        if (document.fullscreenElement || (document as any).webkitFullscreenElement) {
+          if (document.exitFullscreen) {
+            await document.exitFullscreen();
+          } else if ((document as any).webkitExitFullscreen) {
+            await (document as any).webkitExitFullscreen();
+          } else if ((document as any).msExitFullscreen) {
+            await (document as any).msExitFullscreen();
+          }
+        }
+        setIsFullscreen(false);
+      }
+    } catch (err) {
+      console.info('Native browser fullscreen request not permitted in current frame; toggling maximized viewport mode:', err);
+      // Fallback: smoothly toggle in-app immersive fullscreen
+      setIsFullscreen((prev) => !prev);
+    }
+  };
 
   // Track latest state and debounce cloud writes
   const latestScrapbookRef = useRef<Scrapbook>(scrapbook);
@@ -673,14 +741,30 @@ export function PhysicalScrapbookBook({
 
   // Remove pressed flower or sticker
   const handleRemoveStickerFromSection = (secIndex: number, stickerId: string) => {
-    const newSections = [...scrapbook.sections];
-    if (newSections[secIndex]) {
-      newSections[secIndex].stickers = (newSections[secIndex].stickers || []).filter(s => s.id !== stickerId);
-      updateScrapbookState({ sections: newSections });
-    }
+    if (secIndex < 0 || !scrapbook.sections[secIndex]) return;
+    const targetSection = scrapbook.sections[secIndex];
+    const updatedStickers = (targetSection.stickers || []).filter(s => s.id !== stickerId);
+    const newSections = scrapbook.sections.map((sec, idx) => 
+      idx === secIndex ? { ...sec, stickers: updatedStickers } : sec
+    );
+    updateScrapbookState({ sections: newSections });
     if (selectedStickerId === stickerId) {
       setSelectedStickerId(null);
     }
+    setMementoFeedback('🗑️ Botanical removed');
+    setTimeout(() => setMementoFeedback(null), 1800);
+  };
+
+  // Clear all botanicals from current spread
+  const handleClearAllBotanicalsOnSpread = (secIndex: number) => {
+    if (secIndex < 0 || !scrapbook.sections[secIndex]) return;
+    const newSections = scrapbook.sections.map((sec, idx) => 
+      idx === secIndex ? { ...sec, stickers: [] } : sec
+    );
+    updateScrapbookState({ sections: newSections });
+    setSelectedStickerId(null);
+    setMementoFeedback('🗑️ All botanicals removed from spread');
+    setTimeout(() => setMementoFeedback(null), 1800);
   };
 
   // Add photo upload handler
@@ -913,6 +997,23 @@ export function PhysicalScrapbookBook({
             <GreenPressedLeaf className="w-5 h-9 sm:w-6 sm:h-11 drop-shadow-sm" />
           )}
 
+          {/* Direct Instant Remove Button in Edit Mode */}
+          {isEditMode && (
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                handleRemoveStickerFromSection(currentSpreadIndex - 1, sticker.id);
+              }}
+              className="absolute -top-2 -right-2 z-50 w-5 h-5 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold flex items-center justify-center shadow-md cursor-pointer border border-white hover:scale-110 active:scale-95 transition-transform"
+              title="Remove this botanical memento"
+            >
+              ✕
+            </button>
+          )}
+
           {/* Quick drag indicator dot in edit mode */}
           {isEditMode && (
             <div className="absolute -top-1 -left-1 w-3.5 h-3.5 rounded-full bg-stone-800 text-white flex items-center justify-center text-[7.5px] opacity-60 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xs">
@@ -925,6 +1026,7 @@ export function PhysicalScrapbookBook({
         {isSelected && (
           <div
             className="absolute left-1/2 -top-9 -translate-x-1/2 z-50 bg-[#2c2217] text-[#fcf8f2] text-[10px] px-2 py-0.5 rounded-md shadow-2xl flex items-center gap-1.5 whitespace-nowrap animate-in fade-in zoom-in-95 pointer-events-auto border border-[#715c48]"
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Tilt Button */}
@@ -971,11 +1073,17 @@ export function PhysicalScrapbookBook({
             {/* Remove */}
             <button
               type="button"
-              onClick={() => handleRemoveStickerFromSection(currentSpreadIndex - 1, sticker.id)}
-              className="px-1 py-0.5 hover:bg-rose-700 rounded text-rose-300 transition-colors ml-0.5 cursor-pointer"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                handleRemoveStickerFromSection(currentSpreadIndex - 1, sticker.id);
+              }}
+              className="px-1.5 py-0.5 bg-rose-700/90 hover:bg-rose-700 rounded text-white font-bold transition-colors ml-0.5 cursor-pointer flex items-center gap-0.5"
               title="Remove botanical"
             >
-              ✕
+              <span>✕</span>
+              <span>Remove</span>
             </button>
           </div>
         )}
@@ -985,6 +1093,7 @@ export function PhysicalScrapbookBook({
 
   return (
     <div 
+      ref={bookContainerRef}
       className={
         isFullscreen
           ? "fixed inset-0 z-50 flex flex-col h-screen w-screen bg-[#ede4d4] overflow-hidden select-none animate-in fade-in duration-200"
@@ -1117,9 +1226,15 @@ export function PhysicalScrapbookBook({
 
           {/* Fullscreen Button */}
           <button
-            onClick={() => setIsFullscreen(!isFullscreen)}
-            className="w-7 h-7 sm:w-7.5 sm:h-7.5 rounded-lg bg-white hover:bg-stone-50 border border-[#d3c8b4] text-stone-700 flex items-center justify-center shadow-2xs transition-all cursor-pointer"
+            type="button"
+            onClick={toggleFullscreen}
+            className={`w-7 h-7 sm:w-7.5 sm:h-7.5 rounded-lg border flex items-center justify-center shadow-2xs transition-all cursor-pointer ${
+              isFullscreen
+                ? 'bg-amber-800 hover:bg-amber-900 border-amber-900 text-white ring-2 ring-amber-400/60'
+                : 'bg-white hover:bg-stone-50 border-[#d3c8b4] text-stone-700'
+            }`}
             title={isFullscreen ? 'Exit Fullscreen (Esc)' : 'Immersive Fullscreen'}
+            aria-label={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
           >
             {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>
@@ -1215,6 +1330,19 @@ export function PhysicalScrapbookBook({
               <span>🍃 Leaf</span>
             </button>
 
+            {/* Clear All Botanicals on Spread if present */}
+            {currentSection && (currentSection.stickers || []).length > 0 && (
+              <button
+                type="button"
+                onClick={() => handleClearAllBotanicalsOnSpread(currentSpreadIndex - 1)}
+                className="flex items-center gap-1 px-2 py-1 rounded-md bg-rose-50 hover:bg-rose-100 active:scale-95 border border-rose-200 text-rose-800 text-xs font-hand-casual shadow-2xs cursor-pointer transition-all ml-1"
+                title="Remove all botanicals from this chapter spread"
+              >
+                <Trash2 className="w-3 h-3 text-rose-600" />
+                <span>Clear Botanicals ({currentSection.stickers.length})</span>
+              </button>
+            )}
+
             {/* Instant Memento Added Feedback Banner */}
             {mementoFeedback && (
               <span className="text-[11px] font-hand-casual text-amber-900 font-bold bg-amber-100/90 border border-amber-300 px-2 py-0.5 rounded-full animate-in fade-in zoom-in-95 duration-150 shrink-0">
@@ -1250,6 +1378,21 @@ export function PhysicalScrapbookBook({
       {/* ========================================================================= */}
       <main className="flex-1 min-h-0 w-full flex flex-col items-center justify-center p-2 sm:p-3 md:p-4 relative overflow-hidden">
         
+        {/* Fullscreen Ephemeral Advisory Pill */}
+        {fullscreenTip && (
+          <div className="absolute top-2.5 z-50 bg-[#2d2116]/90 backdrop-blur-md text-[#fbf7f0] text-xs font-medium px-4 py-1.5 rounded-full shadow-lg border border-amber-500/40 flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
+            <Maximize2 className="w-3.5 h-3.5 text-amber-400" />
+            <span>{fullscreenTip}</span>
+            <button
+              type="button"
+              onClick={() => setFullscreenTip(null)}
+              className="text-stone-300 hover:text-white ml-1 cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Subtle Ambient Desk Botanical in Top-Right Corner */}
         <div className="hidden lg:block absolute top-0 right-0 pointer-events-none z-0 opacity-60">
           <svg viewBox="0 0 160 160" className="w-24 md:w-28 h-24 md:h-28 filter drop-shadow-sm">
@@ -1266,7 +1409,9 @@ export function PhysicalScrapbookBook({
         {/* VIEW A: COVER VIEW */}
         {/* ========================================================================= */}
         {currentSpreadIndex === 0 ? (
-          <div className="relative flex flex-col items-center justify-center w-full max-w-sm sm:max-w-md my-auto animate-in zoom-in-95 duration-200 select-none py-1 overflow-y-auto scrapbook-page-scroll max-h-[calc(100vh-5rem)]">
+          <div className={`relative flex flex-col items-center justify-center w-full ${
+            isFullscreen ? 'max-w-md sm:max-w-lg' : 'max-w-sm sm:max-w-md'
+          } my-auto animate-in zoom-in-95 duration-200 select-none py-1 overflow-y-auto scrapbook-page-scroll max-h-[calc(100vh-5rem)]`}>
             
             {/* Hardcover Album Jacket */}
             <div className={`relative w-full aspect-[3/4] max-h-[480px] rounded-[20px] shadow-2xl border-4 ${coverTheme.coverBg} ${coverTheme.coverBorder} flex flex-col justify-between overflow-hidden p-5 sm:p-6`}>
@@ -1381,7 +1526,11 @@ export function PhysicalScrapbookBook({
           /* VIEW B: 2-PAGE SPREAD (BALANCED PROPORTIONS, ZERO OVERLAP & SCROLLABLE) */
           /* ========================================================================= */
           currentSection && (
-            <div className="relative flex flex-col items-center justify-center w-full max-w-4xl lg:max-w-5xl xl:max-w-[1040px] h-full max-h-[calc(100vh-5.5rem)] min-h-0 animate-in zoom-in-95 duration-150">
+            <div className={`relative flex flex-col items-center justify-center w-full ${
+              isFullscreen 
+                ? 'max-w-5xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1440px] h-full max-h-[calc(100vh-4.25rem)]' 
+                : 'max-w-4xl lg:max-w-5xl xl:max-w-[1040px] h-full max-h-[calc(100vh-5.5rem)]'
+            } min-h-0 animate-in zoom-in-95 duration-150`}>
               
               {/* Outer Leather Binder Frame with 3D Edge Thickness */}
               <div className={`relative w-full h-full rounded-[18px] sm:rounded-[20px] ${coverTheme.coverBg} p-2 sm:p-2.5 md:p-3 shadow-2xl border-[3px] ${coverTheme.coverBorder} flex items-stretch min-h-0`}>
@@ -1489,34 +1638,6 @@ export function PhysicalScrapbookBook({
                         </p>
                       )}
                     </div>
-
-                    {/* Botanical Mementos Helper & Quick Add (Edit Mode Only) */}
-                    {isEditMode && (
-                      <div className="flex items-center justify-between gap-2 py-1 px-2.5 my-1 rounded-lg bg-[#efe7d8]/60 border border-[#dfd5c4] shrink-0">
-                        <div className="flex items-center gap-1.5 text-[10.5px] font-hand-casual text-stone-700 truncate">
-                          <Flower2 className="w-3.5 h-3.5 text-emerald-800 shrink-0" />
-                          <span className="truncate"><strong>Botanicals:</strong> Drag flowers/leaves anywhere. Click to tilt or move pages.</span>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => addDecorationSticker('daisy')}
-                            className="text-[9.5px] px-1.5 py-0.5 rounded bg-white hover:bg-stone-50 border border-stone-300 text-stone-700 cursor-pointer shadow-2xs font-medium"
-                            title="Add Daisy"
-                          >
-                            + 🌼 Daisy
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => addDecorationSticker('leaf')}
-                            className="text-[9.5px] px-1.5 py-0.5 rounded bg-white hover:bg-stone-50 border border-stone-300 text-stone-700 cursor-pointer shadow-2xs font-medium"
-                            title="Add Green Leaf"
-                          >
-                            + 🍃 Leaf
-                          </button>
-                        </div>
-                      </div>
-                    )}
 
                     {/* Bottom Keepsakes: Travel Ticket Stub + Mint Pastel Sticky Note (Side by Side, Zero Overlap) */}
                     <div className="flex flex-wrap items-end justify-between gap-2 pt-2 mt-auto border-t border-[#dfd2be]/60 shrink-0">
@@ -1653,52 +1774,82 @@ export function PhysicalScrapbookBook({
                       const validPhotos = (currentSection.photos || []).filter((p) => Boolean(p && p.url));
                       
                       if (validPhotos.length === 0) {
-                        /* 0 PHOTOS */
+                        /* 0 PHOTOS: SHOW DEFAULT GOLDEN HOUR POLAROID WITH ADD/CUSTOMIZE OPTION */
+                        const fallbackPhoto = {
+                          url: 'https://images.unsplash.com/photo-1599661046289-e31897846e41?auto=format&fit=crop&w=800&q=80',
+                          caption: 'Golden Hour Memories ♡'
+                        };
                         return (
-                          <div className="relative mx-auto my-1 w-full max-w-[180px] sm:max-w-[200px] text-center">
-                            {isEditMode ? (
-                              <div className="border-2 border-dashed border-[#cbbea8] hover:border-amber-700 bg-white/75 hover:bg-amber-50/40 rounded-xl p-3 flex flex-col items-center justify-center text-center transition-all group shadow-2xs">
-                                <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-900 flex items-center justify-center mb-1 group-hover:scale-105 transition-transform">
-                                  <Camera className="w-4 h-4" />
-                                </div>
-                                <span className="font-serif font-bold text-stone-800 text-xs">No Photos on this Page</span>
-                                <p className="text-[10px] text-stone-500 font-hand-casual mb-2 leading-tight">
-                                  Attach up to 3 polaroids from your device or gallery
-                                </p>
-                                <button
-                                  onClick={() => handleOpenPhotoPicker(currentSpreadIndex - 1, false, undefined, 'add')}
-                                  className="px-3 py-1 rounded-full bg-[#3b4834] hover:bg-[#2c3727] text-white text-[10px] font-semibold flex items-center gap-1 shadow-2xs cursor-pointer transition-all"
-                                >
-                                  <Plus className="w-3 h-3" />
-                                  <span>Add Photo ♡ (0/{MAX_PHOTOS_PER_PAGE})</span>
-                                </button>
+                          <div className="relative mx-auto my-1 w-full max-w-[270px] sm:max-w-[300px] transform rotate-[0.5deg] hover:rotate-0 transition-transform duration-300">
+                            {/* Gold Paperclip */}
+                            <div className="absolute -top-3 right-10 z-30 pointer-events-none">
+                              <PaperClip className="w-4.5 h-9" color="gold" />
+                            </div>
+
+                            {/* Washi Tape Accent */}
+                            <div className="absolute -top-2 -right-2 z-20 pointer-events-none transform rotate-45">
+                              <WashiTapeStrip color="kraft" className="w-8 h-2 text-[6px]" />
+                            </div>
+
+                            {/* Polaroid Frame */}
+                            <div className="polaroid-frame bg-white p-2 pb-2.5 rounded-xs shadow-md border border-stone-200/60 relative z-10">
+                              <div className="relative w-full aspect-[4/3] max-h-[175px] sm:max-h-[195px] bg-[#f5efe4] overflow-hidden group rounded-2xs border border-stone-200/60 flex items-center justify-center">
+                                <img
+                                  src={fallbackPhoto.url}
+                                  alt={fallbackPhoto.caption}
+                                  className="w-full h-full object-cover"
+                                />
+
+                                {isEditMode && (
+                                  <div className="absolute inset-0 bg-black/45 flex items-center justify-center gap-1.5 transition-opacity opacity-0 group-hover:opacity-100 flex-wrap p-1">
+                                    <button
+                                      onClick={() => handleOpenPhotoPicker(currentSpreadIndex - 1, false, undefined, 'add')}
+                                      className="px-2.5 py-1 rounded-full bg-[#3b4834] hover:bg-[#2c3727] text-white text-[10px] font-semibold flex items-center gap-1 shadow-md cursor-pointer"
+                                    >
+                                      <Plus className="w-3 h-3" />
+                                      <span>Upload Your Photo</span>
+                                    </button>
+                                  </div>
+                                )}
                               </div>
-                            ) : (
-                              currentSection.quote ? (
-                                <div className="p-3 bg-white/60 border border-[#e5dcce]/80 rounded-xl shadow-2xs text-center transform rotate-0.5">
-                                  <p className="font-hand-casual text-xs text-stone-700 italic leading-relaxed">
-                                    "{currentSection.quote}" <span className="font-handwriting text-stone-800 font-bold">♡</span>
-                                  </p>
-                                </div>
-                              ) : null
-                            )}
+
+                              {/* Caption */}
+                              <div className="mt-1 text-center">
+                                <p className="font-handwriting text-sm sm:text-base font-bold text-center text-[#2d2116] tracking-wide">
+                                  {fallbackPhoto.caption}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Memory Quote underneath */}
+                            <div className="my-1.5 text-center px-2">
+                              <p className="font-hand-casual text-xs sm:text-[13px] text-[#403123] italic leading-relaxed">
+                                "{currentSection.quote || 'Some memories stay bright even as seasons shift.'}"
+                              </p>
+                              <span className="font-handwriting text-stone-700 text-xs block mt-0.5 font-bold">♡</span>
+                            </div>
                           </div>
                         );
                       }
 
                       if (validPhotos.length === 1) {
-                        /* 1 PHOTO: CLASSIC CENTERED POLAROID (ADJUSTABLE FRAMING & FIT) */
+                        /* 1 PHOTO: CLASSIC CENTERED POLAROID (MATCHING REFERENCE IMAGE) */
                         const photo = validPhotos[0];
                         return (
-                          <div className="relative mx-auto my-1 w-full max-w-[190px] sm:max-w-[210px] transform rotate-0.5 hover:rotate-0 transition-transform duration-300">
-                            {/* Paperclip */}
-                            <div className="absolute -top-2.5 right-2 z-30 pointer-events-none">
-                              <PaperClip className="w-4 h-8" color="gold" />
+                          <div className="relative mx-auto my-1 w-full max-w-[270px] sm:max-w-[300px] transform rotate-[0.5deg] hover:rotate-0 transition-transform duration-300">
+                            {/* Gold Paperclip */}
+                            <div className="absolute -top-3 right-10 z-30 pointer-events-none">
+                              <PaperClip className="w-4.5 h-9" color="gold" />
+                            </div>
+
+                            {/* Washi Tape Accent */}
+                            <div className="absolute -top-2 -right-2 z-20 pointer-events-none transform rotate-45">
+                              <WashiTapeStrip color="kraft" className="w-8 h-2 text-[6px]" />
                             </div>
 
                             {/* Polaroid Frame */}
-                            <div className="polaroid-frame bg-white p-1.5 pb-2 rounded-xs shadow-md relative z-10">
-                              <div className="relative w-full aspect-[4/3] sm:aspect-square max-h-[165px] sm:max-h-[185px] bg-[#f5efe4] overflow-hidden group rounded-2xs border border-stone-200/60 flex items-center justify-center">
+                            <div className="polaroid-frame bg-white p-2 pb-2.5 rounded-xs shadow-md border border-stone-200/60 relative z-10">
+                              <div className="relative w-full aspect-[4/3] max-h-[175px] sm:max-h-[195px] bg-[#f5efe4] overflow-hidden group rounded-2xs border border-stone-200/60 flex items-center justify-center">
                                 <img
                                   src={photo.url}
                                   alt={photo.caption || 'Memories'}
@@ -1767,7 +1918,7 @@ export function PhysicalScrapbookBook({
                               </div>
 
                               {/* Caption */}
-                              <div className="mt-0.5 text-center">
+                              <div className="mt-1 text-center">
                                 {isEditMode ? (
                                   <input
                                     type="text"
@@ -1779,11 +1930,11 @@ export function PhysicalScrapbookBook({
                                         updateCurrentSection({ photos: newPhotos });
                                       }
                                     }}
-                                    className="w-full font-handwriting text-xs text-center text-[#3a2e22] bg-transparent border-b border-dashed border-stone-300 focus:border-stone-600 focus:outline-none"
+                                    className="w-full font-handwriting text-sm sm:text-base font-bold text-center text-[#2d2116] bg-transparent border-b border-dashed border-stone-300 focus:border-stone-600 focus:outline-none"
                                     placeholder="Photo caption ♡"
                                   />
                                 ) : (
-                                  <p className="font-handwriting text-xs font-bold text-center text-[#3a2e22]">
+                                  <p className="font-handwriting text-sm sm:text-base font-bold text-center text-[#2d2116] tracking-wide">
                                     {photo.caption || 'Captured Memories ♡'}
                                   </p>
                                 )}
@@ -1791,9 +1942,12 @@ export function PhysicalScrapbookBook({
                             </div>
 
                             {/* Memory Quote underneath */}
-                            <p className="font-hand-casual text-[10px] sm:text-[11px] text-stone-600 italic text-center mt-1">
-                              "{currentSection.quote || 'Some memories stay bright even as seasons shift.'}" <span className="font-handwriting text-stone-700">♡</span>
-                            </p>
+                            <div className="my-1.5 text-center px-2">
+                              <p className="font-hand-casual text-xs sm:text-[13px] text-[#403123] italic leading-relaxed">
+                                "{currentSection.quote || 'Some memories stay bright even as seasons shift.'}"
+                              </p>
+                              <span className="font-handwriting text-stone-700 text-xs block mt-0.5 font-bold">♡</span>
+                            </div>
                           </div>
                         );
                       }
@@ -2092,7 +2246,7 @@ export function PhysicalScrapbookBook({
                     })()}
 
                     {/* Voice Memos / Audio Notes with Recording & Story Narrator (Limit 2 as per Page Size) */}
-                    <div className="w-full max-w-[270px] sm:max-w-[290px] mx-auto shrink-0 my-0.5">
+                    <div className="w-full max-w-[280px] sm:max-w-[310px] mx-auto shrink-0 my-1">
                       <ScrapbookVoiceNote
                         audioNotes={currentSection.audioNotes}
                         audioData={currentSection.audioNote}
@@ -2114,8 +2268,8 @@ export function PhysicalScrapbookBook({
                       />
                     </div>
 
-                    {/* Gemini AI Heartfelt Reflection (Natural Scrapbook Torn Note) */}
-                    <div className="w-full max-w-[240px] sm:max-w-[260px] mx-auto shrink-0 my-0.5">
+                    {/* Gemini AI Heartfelt Reflection (Natural Scrapbook Torn Note with Brass Pin & Floral Accent) */}
+                    <div className="w-full max-w-[280px] sm:max-w-[310px] mx-auto shrink-0 my-1">
                       <GeminiParchmentCard
                         insight={currentSection.geminiReflectionNote?.insight || 'Your memories radiate a deep sense of presence and quiet wonder. Cherish this stillness.'}
                         className="w-full"
@@ -2124,8 +2278,8 @@ export function PhysicalScrapbookBook({
 
                     {/* Bottom Right Page Number */}
                     <div className="flex items-center justify-end pt-1 shrink-0">
-                      <span className="font-handwriting text-[11px] text-stone-500 font-bold tracking-wider">
-                        — Page {currentSpreadIndex * 2} —
+                      <span className="font-handwriting text-xs text-stone-500 font-bold tracking-wider">
+                        — Page {currentSpreadIndex * 2} 🪶 —
                       </span>
                     </div>
 

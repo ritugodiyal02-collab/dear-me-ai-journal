@@ -615,7 +615,7 @@ function MainApp() {
         addToast('error', 'Delete Failed', res.error || 'Could not delete entry.');
       }
     } catch (err: any) {
-      console.error('Delete reflection error:', err);
+      console.warn('Delete reflection error:', err);
       addToast('error', 'Delete Failed', err?.message || 'Could not delete entry.');
     }
   };
@@ -689,7 +689,7 @@ function MainApp() {
         addToast('error', 'Delete Failed', res.error || 'Could not delete scrapbook from database.');
       }
     } catch (err: any) {
-      console.error('Delete scrapbook error:', err);
+      console.warn('Delete scrapbook error:', err);
       addToast('error', 'Delete Failed', err?.message || 'Could not delete scrapbook from database.');
     }
   };

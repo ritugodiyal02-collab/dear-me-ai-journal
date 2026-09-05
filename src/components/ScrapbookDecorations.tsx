@@ -372,7 +372,7 @@ export function StickyNote({
 export function GeminiParchmentCard({
   insight,
   className = "w-full",
-  title = "A Quiet Thought ♡"
+  title = "Gemini Reflection ✨"
 }: {
   insight: string;
   className?: string;
@@ -380,33 +380,38 @@ export function GeminiParchmentCard({
 }) {
   return (
     <div 
-      className={`relative bg-[#f5ecdc] border border-[#d8c7b0] rounded-xs p-2 pt-2.5 shadow-2xs transform -rotate-0.5 hover:rotate-0 transition-transform ${className}`}
+      className={`relative bg-[#f5eddf] border border-[#d8c8b2] rounded-xs p-2.5 pl-5 pr-3 shadow-2xs transform -rotate-0.5 hover:rotate-0 transition-transform ${className}`}
       style={{
-        backgroundImage: 'radial-gradient(#e6d8c3 0.6px, transparent 0.6px)',
-        backgroundSize: '10px 10px'
+        backgroundImage: 'radial-gradient(#e5d7c3 0.6px, transparent 0.6px)',
+        backgroundSize: '9px 9px'
       }}
     >
-      {/* Top Center Washi Tape Strip holding down the paper */}
-      <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-        <WashiTapeStrip color="mint" className="px-2.5 py-0.2 text-[9px] font-handwriting font-bold" label="✦ Reflection" rotation={-1} />
+      {/* Brass pushpin on the top-left edge */}
+      <div className="absolute -top-1.5 left-3 z-20 pointer-events-none">
+        <BrassPin className="w-3.5 h-3.5 shadow-sm" />
       </div>
 
-      {/* Torn / Deckle Edge effect on header */}
-      <div className="flex items-center justify-between mb-0.5 mt-0.5">
-        <div className="flex items-center gap-1">
-          <span className="font-handwriting font-bold text-[#543b23] text-xs sm:text-[13px] tracking-wide">
-            {title}
-          </span>
-        </div>
-        <span className="text-amber-700/80 text-[10px]">✨</span>
+      {/* Left-edge notebook spiral punch holes */}
+      <div className="absolute left-1 top-2 bottom-2 flex flex-col justify-around pointer-events-none select-none">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="w-1.5 h-1.5 rounded-full bg-[#ebdcc9] border border-[#cfbeaa] shadow-inner" />
+        ))}
       </div>
 
-      <p className="font-hand-casual text-[11px] sm:text-xs leading-snug text-[#3e2c1a] select-text">
-        {insight}
+      {/* Header with Title & Sparkle */}
+      <div className="flex items-center justify-between mb-1">
+        <span className="font-handwriting font-bold text-[#543b23] text-xs sm:text-[13px] tracking-wide">
+          {title}
+        </span>
+      </div>
+
+      {/* Reflection insight text */}
+      <p className="font-hand-casual text-[11px] sm:text-xs leading-relaxed text-[#3c2b1a] select-text italic">
+        "{insight}"
       </p>
 
-      {/* Tiny subtle dried wildflower sprig on bottom right */}
-      <div className="absolute -bottom-1 -right-1 opacity-70 pointer-events-none">
+      {/* Tiny pressed wildflower sprig tucked in bottom right corner */}
+      <div className="absolute -bottom-1 -right-1 opacity-75 pointer-events-none">
         <WildflowerBouquet className="w-4 h-6 transform rotate-15" />
       </div>
     </div>

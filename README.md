@@ -97,11 +97,13 @@ gcloud run services update gemini-reflections-app \
 
 ## 6. Functional Stability & User Walkthrough Test Cases
 
-### Test Case 1: Federated User Authentication
+### Test Case 1: User Authentication & Resilient Guest Mode
 - **Step 1.1**: Open the application landing page.
-- **Expected**: The landing hero displays with the "Continue with Google Account" CTA button and Security Shield overview.
-- **Step 1.2**: Click "Continue with Google Account".
-- **Expected**: Google Sign-In popup opens. Upon authorization, the user is authenticated and immediately directed to the private dashboard with their profile picture and name in the top navigation.
+- **Expected**: The landing hero displays with the "Sign in with Google Account" CTA, "Explore as Guest (Local Sanctuary)" button, and "Encrypted & Private" security badge.
+- **Step 1.2**: Click "Explore as Guest (Local Sanctuary)".
+- **Expected**: User immediately enters the application without authentication blockers, assigned an explorer profile with local storage persistence.
+- **Step 1.3**: If clicking "Sign in with Google Account" on an unapproved domain:
+- **Expected**: The system catches `auth/unauthorized-domain`, displays an interactive helper card with the exact hostname, a single-click Copy button, a direct link to Firebase Console Settings, and an instant "Continue as Guest" fallback.
 
 ### Test Case 2: Multi-Turn Conversational Reflection
 - **Step 2.1**: Select "Reflection & Inquiry" mode and type a reflection into the Journal Entry body.
@@ -115,11 +117,11 @@ gcloud run services update gemini-reflections-app \
 - **Step 3.2**: Send a prompt asking for actionable strategies.
 - **Expected**: Gemini tailors its output structure to bulleted brainstorm ideas and concrete milestone steps.
 
-### Test Case 4: Automated Synthesis & Firestore Persistence
+### Test Case 4: Automated Synthesis & Persistence
 - **Step 4.1**: Click the "Synthesize Insights" button.
 - **Expected**: Gemini analyzes the draft and transcript, returning an Executive Summary, Key Insights, and Action Milestones into the structured insight panel.
 - **Step 4.2**: Observe the persistence indicator.
-- **Expected**: Shows "Saved to Firestore" badge. The entry is listed in the History sidebar with real-time sync.
+- **Expected**: Shows "Saved" badge (synced to Firestore for authenticated users, local browser storage for guest exploration).
 
 ### Test Case 5: History Search, Filter, and Deletion
 - **Step 5.1**: Click "New Reflection" in the navbar to open a blank entry.
@@ -128,4 +130,12 @@ gcloud run services update gemini-reflections-app \
 - **Step 5.3**: Click the past reflection from the list.
 - **Expected**: Loads the full content, chat history, and synthesis.
 - **Step 5.4**: Click the delete icon on an entry and confirm the prompt.
-- **Expected**: The entry is safely deleted from Firestore and removed from the sidebar.
+- **Expected**: The entry is safely deleted and removed from the sidebar.
+
+### Test Case 6: Scrapbook Creation & Physical Book Flip
+- **Step 6.1**: In the navbar, click "Scrapbooks".
+- **Step 6.2**: Click "Create New Scrapbook", provide a title and select a theme (e.g., Vintage Parchment or Cozy Forest).
+- **Expected**: The new scrapbook is created and opens in the physical book flipper view.
+- **Step 6.3**: Add pages, stickers, and photos or click "Ask Story Assistant".
+- **Expected**: Interactive page turns animate smoothly, and Gemini Story Assistant generates thoughtful caption ideas.
+
