@@ -1,0 +1,6 @@
+{
+  "name": "My World",
+  "description": "A personalized mindful journaling, multimodal reflection, and AI story scrapbook space powered by Gemini.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

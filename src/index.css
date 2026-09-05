@@ -1,0 +1,226 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: #fafaf9; /* stone-50 */
+    color: #292524; /* stone-800 */
+  }
+
+  h1, h2, h3, h4, .font-serif-title {
+    font-family: 'Fraunces', Georgia, serif;
+    letter-spacing: -0.015em;
+  }
+}
+
+.font-handwriting {
+  font-family: 'Caveat', cursive;
+}
+
+.font-script {
+  font-family: 'Marck Script', cursive;
+}
+
+.font-hand-casual {
+  font-family: 'Patrick Hand', cursive;
+}
+
+.font-kalam {
+  font-family: 'Kalam', cursive;
+}
+
+.font-typewriter {
+  font-family: 'Courier Prime', monospace;
+}
+
+.font-display-serif {
+  font-family: 'Playfair Display', Georgia, serif;
+}
+
+/* Scrapbook Paper Texture & Depth */
+.scrapbook-paper-parchment {
+  background-color: #f7f2e7;
+  background-image: radial-gradient(#dfd4be 0.75px, transparent 0.75px);
+  background-size: 14px 14px;
+}
+
+.scrapbook-paper-cream {
+  background-color: #fcf9f2;
+}
+
+/* Book spine and 2-page spread crease shadow */
+.book-spine-shadow-left {
+  box-shadow: inset -18px 0 24px -10px rgba(78, 62, 45, 0.18);
+}
+
+.book-spine-shadow-right {
+  box-shadow: inset 18px 0 24px -10px rgba(78, 62, 45, 0.18);
+}
+
+.book-center-crease {
+  background: linear-gradient(to right, rgba(0,0,0,0.12), rgba(0,0,0,0.02) 25%, rgba(0,0,0,0.02) 75%, rgba(0,0,0,0.12));
+}
+
+/* Washi Tape Styles */
+.washi-tape {
+  background: rgba(243, 232, 217, 0.85);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  backdrop-filter: blur(1px);
+}
+
+.washi-tape-pink {
+  background: rgba(251, 207, 213, 0.85);
+}
+
+.washi-tape-mint {
+  background: rgba(209, 238, 224, 0.85);
+}
+
+.washi-tape-yellow {
+  background: rgba(254, 240, 199, 0.9);
+}
+
+.washi-tape-kraft {
+  background: rgba(224, 202, 174, 0.85);
+}
+
+/* Sticky Note with subtle bottom-right lift shadow */
+.sticky-note-yellow {
+  background: #fef08a;
+  box-shadow: 2px 4px 10px rgba(120, 90, 40, 0.15), 0 1px 2px rgba(0,0,0,0.08);
+}
+
+.sticky-note-pink {
+  background: #fecdd3;
+  box-shadow: 2px 4px 10px rgba(160, 60, 80, 0.15), 0 1px 2px rgba(0,0,0,0.08);
+}
+
+.sticky-note-mint {
+  background: #bbf7d0;
+  box-shadow: 2px 4px 10px rgba(40, 120, 80, 0.15), 0 1px 2px rgba(0,0,0,0.08);
+}
+
+/* Polaroid Photo Card */
+.polaroid-frame {
+  background: #ffffff;
+  padding: 10px 10px 24px 10px;
+  box-shadow: 0 6px 16px -2px rgba(60, 45, 30, 0.16), 0 2px 6px rgba(0,0,0,0.06);
+  border: 1px solid rgba(220, 210, 195, 0.7);
+}
+
+/* Warm stone scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #e7e5e4; /* stone-200 */
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #d6d3d1; /* stone-300 */
+}
+
+/* Editorial Reflection Typography for Gemini Responses */
+.reflection-prose {
+  font-size: 0.925rem;
+  line-height: 1.75;
+  color: #292524;
+}
+
+.reflection-prose p {
+  margin-bottom: 1rem;
+  line-height: 1.75;
+}
+
+.reflection-prose p:last-child {
+  margin-bottom: 0;
+}
+
+.reflection-prose strong {
+  font-weight: 600;
+  color: #1c1917;
+}
+
+.reflection-prose em {
+  font-style: italic;
+  color: #44403c;
+}
+
+.reflection-prose ul {
+  list-style-type: none;
+  padding-left: 0.25rem;
+  margin-top: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.reflection-prose ul li {
+  position: relative;
+  padding-left: 1.25rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.7;
+}
+
+.reflection-prose ul li::before {
+  content: "•";
+  position: absolute;
+  left: 0.25rem;
+  color: #047857; /* emerald-700 */
+  font-weight: bold;
+  font-size: 1.1rem;
+  line-height: 1.2;
+}
+
+.reflection-prose blockquote {
+  border-left: 3px solid #d97706; /* amber-600 */
+  background-color: #fffbeb; /* amber-50 */
+  padding: 0.75rem 1rem;
+  border-radius: 0 0.75rem 0.75rem 0;
+  margin: 1rem 0;
+  font-style: italic;
+  color: #451a03;
+}
+
+.reflection-prose h1, .reflection-prose h2, .reflection-prose h3, .reflection-prose h4 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 600;
+  color: #1c1917;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.01em;
+}
+
+.reflection-prose h3 {
+  font-size: 1.1rem;
+}
+
+.reflection-prose h4 {
+  font-size: 1rem;
+}
+
+/* Subtle Parchment Page Scrollbar */
+.scrapbook-page-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.scrapbook-page-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrapbook-page-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(180, 160, 135, 0.45);
+  border-radius: 9999px;
+}
+
+.scrapbook-page-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(140, 120, 95, 0.65);
+}
+
+.scrapbook-page-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(180, 160, 135, 0.45) transparent;
+}
