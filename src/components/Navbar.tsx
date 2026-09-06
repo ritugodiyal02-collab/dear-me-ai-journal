@@ -135,9 +135,14 @@ export function Navbar({
 
               {/* User Dropdown */}
               {isUserMenuOpen && (
-                <div className="absolute right-0 top-10 z-50 bg-white border border-stone-200 rounded-xl shadow-lg py-1.5 w-40 text-xs animate-in fade-in zoom-in-95 duration-100">
+                <div className="absolute right-0 top-10 z-50 bg-white border border-stone-200 rounded-xl shadow-lg py-1.5 w-48 text-xs animate-in fade-in zoom-in-95 duration-100">
                   <div className="px-3 py-1.5 border-b border-stone-100 text-stone-500 text-[11px]">
-                    Signed in as <span className="font-semibold text-stone-800">{displayName}</span>
+                    <div>Signed in as <span className="font-semibold text-stone-800">{displayName}</span></div>
+                    {isGuest && (
+                      <div className="mt-1 text-[10px] font-medium text-emerald-800 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-md inline-block">
+                        Ephemeral Sandbox
+                      </div>
+                    )}
                   </div>
                   {isGuest && (
                     <button
@@ -167,9 +172,10 @@ export function Navbar({
                       signOut();
                     }}
                     className="w-full px-3 py-1.5 text-left text-rose-600 hover:bg-rose-50 flex items-center gap-2 cursor-pointer border-t border-stone-100"
+                    title={isGuest ? 'Exit Explorer and permanently clear all ephemeral sandbox data' : 'Sign out of your account'}
                   >
                     <LogOut className="w-3.5 h-3.5" />
-                    <span>Sign Out</span>
+                    <span>{isGuest ? 'Exit & Clear Sandbox' : 'Sign Out'}</span>
                   </button>
                 </div>
               )}

@@ -51,3 +51,48 @@ export async function idbGet<T>(key: string): Promise<T | null> {
     return null;
   }
 }
+
+export async function idbDelete(key: string): Promise<void> {
+  try {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.delete(key);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn('idbDelete notice:', err);
+  }
+}
+
+export async function idbClearGuestEntries(): Promise<void> {
+  try {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.openCursor();
+      req.onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+        if (cursor) {
+          const keyStr = String(cursor.key);
+          if (
+            keyStr.includes('guest') ||
+            keyStr.includes('scrapbook_raj_') ||
+            keyStr.includes('ref_welcome_')
+          ) {
+            cursor.delete();
+          }
+          cursor.continue();
+        } else {
+          resolve();
+        }
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn('idbClearGuestEntries notice:', err);
+  }
+}

@@ -245,9 +245,10 @@ export function LandingHero({ onOpenSecurity }: LandingHeroProps) {
             onClick={handleGuestEntry}
             disabled={isSigningIn || isEnteringGuest}
             className="w-full sm:w-auto flex items-center justify-center gap-2.5 px-6 py-4 rounded-2xl bg-white hover:bg-stone-100 active:bg-stone-200 border border-stone-300 text-stone-700 font-semibold shadow-xs transition-all transform hover:-translate-y-0.5 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed text-sm sm:text-base"
+            title="Option A: Ephemeral Sandbox (Recommended for privacy) — session is wiped completely upon exit"
           >
             <Compass className="w-5 h-5 text-emerald-700 shrink-0" />
-            <span>{isEnteringGuest ? 'Entering...' : 'Explore as Guest (Local Sanctuary)'}</span>
+            <span>{isEnteringGuest ? 'Entering Sandbox...' : 'Explore as Guest (Ephemeral Sandbox)'}</span>
           </button>
         </motion.div>
 

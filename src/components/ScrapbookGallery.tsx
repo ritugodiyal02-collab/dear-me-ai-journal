@@ -26,7 +26,6 @@ interface ScrapbookGalleryProps {
   onCreateNewScrapbook: () => void;
   onDeleteScrapbook: (id: string, title?: string, e?: React.MouseEvent) => void;
   onOpenJournalMode: () => void;
-  onLoadSampleScrapbooks?: () => void;
   isLoading: boolean;
 }
 
@@ -103,7 +102,6 @@ export function ScrapbookGallery({
   onCreateNewScrapbook,
   onDeleteScrapbook,
   onOpenJournalMode,
-  onLoadSampleScrapbooks,
   isLoading
 }: ScrapbookGalleryProps) {
   const [selectedCategory, setSelectedCategory] = useState<ScrapbookCategory>('All');
@@ -209,14 +207,6 @@ export function ScrapbookGallery({
               >
                 Create New Scrapbook
               </button>
-              {onLoadSampleScrapbooks && (
-                <button
-                  onClick={onLoadSampleScrapbooks}
-                  className="px-4 py-2 rounded-full border border-amber-300 bg-amber-50/80 hover:bg-amber-100 text-amber-900 text-xs font-semibold cursor-pointer"
-                >
-                  Load Sample Albums
-                </button>
-              )}
               <button
                 onClick={onOpenJournalMode}
                 className="px-4 py-2 rounded-full border border-stone-300 bg-white hover:bg-stone-50 text-stone-700 text-xs font-medium cursor-pointer"

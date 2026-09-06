@@ -16,7 +16,7 @@ import {
 import { db, auth } from './firebase';
 import firebaseConfigJson from '../../firebase-applet-config.json';
 import { JournalReflection, UserProfile, Scrapbook } from '../types';
-import { idbSet, idbGet } from './idbStorage';
+import { idbSet, idbGet, idbDelete, idbClearGuestEntries } from './idbStorage';
 
 export enum OperationType {
   CREATE = 'create',
@@ -181,20 +181,116 @@ const LS_INITIALIZED = (uid: string) => `has_initialized_scrapbooks_${uid}`;
 // In-memory runtime cache to guarantee immediate synchronous retrieval
 const memoryReflectionsCache: Record<string, JournalReflection[]> = {};
 
+// Local subscriber registry to keep local and guest UI reactively updated on mutations
+type LocalReflectionsListener = (reflections: JournalReflection[]) => void;
+const localReflectionsListeners: Record<string, Set<LocalReflectionsListener>> = {};
+
+function notifyLocalReflections(userId: string, reflections: JournalReflection[]): void {
+  if (localReflectionsListeners[userId]) {
+    localReflectionsListeners[userId].forEach((listener) => {
+      try {
+        listener(reflections);
+      } catch (err) {
+        console.warn('Local reflections listener error:', err);
+      }
+    });
+  }
+}
+
+type LocalScrapbooksListener = (scrapbooks: Scrapbook[]) => void;
+const localScrapbooksListeners: Record<string, Set<LocalScrapbooksListener>> = {};
+
+function notifyLocalScrapbooks(userId: string, scrapbooks: Scrapbook[]): void {
+  if (localScrapbooksListeners[userId]) {
+    localScrapbooksListeners[userId].forEach((listener) => {
+      try {
+        listener(scrapbooks);
+      } catch (err) {
+        console.warn('Local scrapbooks listener error:', err);
+      }
+    });
+  }
+}
+
 export function getLocalReflections(userId: string): JournalReflection[] {
   if (!userId) return [];
+  const sanitize = (items: JournalReflection[]) =>
+    items.filter(item => !item.id.startsWith('ref_welcome_') && item.title !== 'Welcome to My World 🌱');
+
   if (memoryReflectionsCache[userId] && memoryReflectionsCache[userId].length > 0) {
-    return memoryReflectionsCache[userId];
+    return sanitize(memoryReflectionsCache[userId]);
   }
   try {
     const raw = localStorage.getItem(LS_REFLECTIONS(userId));
     if (raw) {
       const parsed = JSON.parse(raw);
-      memoryReflectionsCache[userId] = parsed;
-      return parsed;
+      const clean = sanitize(parsed);
+      memoryReflectionsCache[userId] = clean;
+      return clean;
     }
   } catch {}
   return [];
+}
+
+export function isStarterScrapbook(item: Scrapbook): boolean {
+  if (!item) return false;
+  return (
+    (item.id && (
+      item.id.startsWith('scrapbook_raj_') ||
+      item.id.startsWith('scrapbook_coffee_') ||
+      item.id.startsWith('scrapbook_pines_')
+    )) ||
+    item.title === 'Rajasthan' ||
+    item.title === 'Weekend Calm' ||
+    item.title === 'Alpine Trails'
+  );
+}
+
+/**
+ * Ephemeral Sandbox (Option A) for Explorer / Guest mode.
+ * Completely purges all local storage items, IndexedDB records, and in-memory caches
+ * created during the guest session so no trace remains upon logout.
+ */
+export async function clearEphemeralGuestData(guestUid?: string): Promise<void> {
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) {
+        if (
+          key.includes('guest') ||
+          (guestUid && key.includes(guestUid)) ||
+          key === 'craft_guest_session' ||
+          key === 'craft_guest_uid' ||
+          key.includes('scrapbook_raj_') ||
+          key.includes('has_initialized_scrapbooks_') ||
+          key.includes('has_initialized_reflections_')
+        ) {
+          keysToRemove.push(key);
+        }
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+  } catch (err) {
+    console.warn('LocalStorage guest cleanup warning:', err);
+  }
+
+  // Clear in-memory cache
+  if (guestUid && memoryReflectionsCache[guestUid]) {
+    delete memoryReflectionsCache[guestUid];
+  }
+  Object.keys(memoryReflectionsCache).forEach((k) => {
+    if (k.includes('guest_')) {
+      delete memoryReflectionsCache[k];
+    }
+  });
+
+  // Clear IndexedDB
+  if (guestUid) {
+    await idbDelete(LS_REFLECTIONS(guestUid)).catch(() => {});
+    await idbDelete(LS_SCRAPBOOKS(guestUid)).catch(() => {});
+  }
+  await idbClearGuestEntries().catch(() => {});
 }
 
 export function saveLocalReflections(userId: string, reflections: JournalReflection[]): void {
@@ -207,6 +303,8 @@ export function saveLocalReflections(userId: string, reflections: JournalReflect
   }
   // Resiliently persist full payload with audio/images in IndexedDB
   idbSet(LS_REFLECTIONS(userId), reflections).catch(() => {});
+  // Reactively notify any active subscribers
+  notifyLocalReflections(userId, reflections);
 }
 
 export function saveLocalReflectionItem(userId: string, item: JournalReflection): void {
@@ -229,7 +327,13 @@ export function getLocalScrapbooks(userId: string): Scrapbook[] {
   if (!userId) return [];
   try {
     const raw = localStorage.getItem(LS_SCRAPBOOKS(userId));
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const list: Scrapbook[] = JSON.parse(raw);
+    const clean = Array.isArray(list) ? list.filter((s) => !isStarterScrapbook(s)) : [];
+    if (clean.length !== list.length) {
+      localStorage.setItem(LS_SCRAPBOOKS(userId), JSON.stringify(clean));
+    }
+    return clean;
   } catch {
     return [];
   }
@@ -242,6 +346,7 @@ export function saveLocalScrapbooks(userId: string, scrapbooks: Scrapbook[]): vo
   } catch (err) {
     console.warn('LocalStorage save warning:', err);
   }
+  notifyLocalScrapbooks(userId, scrapbooks);
 }
 
 export function saveLocalScrapbookItem(userId: string, item: Scrapbook): void {
@@ -555,9 +660,32 @@ export function subscribeUserReflections(
     onData(localItems);
   }
 
-  // If quota is already exceeded or unauthenticated guest mode, don't attempt to open a listeners connection
+  // If quota is already exceeded or unauthenticated guest mode (Explorer),
+  // NEVER leave the listener hanging! Provide local data immediately.
   if (isDailyQuotaExceeded || !auth.currentUser) {
-    return () => {};
+    // If localItems is empty (e.g., fresh guest session), immediately call onData([])
+    // so loading state resolves without spinning indefinitely.
+    if (localItems.length === 0) {
+      onData([]);
+    }
+
+    // Also check IndexedDB asynchronously in case larger items exist
+    idbGet<JournalReflection[]>(LS_REFLECTIONS(userId)).then((idbItems) => {
+      if (idbItems && idbItems.length > 0) {
+        memoryReflectionsCache[userId] = idbItems;
+        onData(idbItems);
+      }
+    }).catch(() => {});
+
+    // Register to local reflections listener so edits/deletions update in real-time
+    if (!localReflectionsListeners[userId]) {
+      localReflectionsListeners[userId] = new Set();
+    }
+    localReflectionsListeners[userId].add(onData);
+
+    return () => {
+      localReflectionsListeners[userId]?.delete(onData);
+    };
   }
 
   const reflectionsCol = collection(db, 'users', userId, 'reflections');
@@ -571,6 +699,11 @@ export function subscribeUserReflections(
         const results: JournalReflection[] = [];
         snapshot.forEach((docSnap) => {
           const cloudDoc = docSnap.data() as JournalReflection;
+          // Filter out default starter reflections so they are never shown to normal users or explorers
+          if (cloudDoc.id.startsWith('ref_welcome_') || cloudDoc.title === 'Welcome to My World 🌱') {
+            deleteDoc(docSnap.ref).catch(() => {});
+            return;
+          }
           // Merge local audio and full-fidelity media if cloud document pruned them for 1MB limits
           const localMatch = localCurrent.find(l => l.id === cloudDoc.id);
           if (localMatch) {
@@ -596,9 +729,16 @@ export function subscribeUserReflections(
           results.push(cloudDoc);
         });
 
-        // Merge with local items if local has newer entries
-        saveLocalReflections(userId, results);
-        onData(results);
+        // Merge any locally pending items not yet reflected in Firestore snapshot
+        const missingLocalItems = localCurrent.filter(
+          loc => !results.some(cloud => cloud.id === loc.id)
+        );
+        const mergedResults = [...results, ...missingLocalItems].sort(
+          (a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0)
+        );
+
+        saveLocalReflections(userId, mergedResults);
+        onData(mergedResults);
       },
       (err) => {
         if (isQuotaExceededError(err)) {
@@ -607,15 +747,16 @@ export function subscribeUserReflections(
           onData(getLocalReflections(userId));
           return;
         }
-        console.warn('Snapshot notice for user reflections:', err);
+        console.warn('Snapshot notice for user reflections (falling back to local):', err);
+        onData(getLocalReflections(userId));
         onError(err);
       }
     );
   } catch (err: any) {
     if (isQuotaExceededError(err)) {
       setQuotaExceededState(true);
-      onData(getLocalReflections(userId));
     }
+    onData(getLocalReflections(userId));
     return () => {};
   }
 }
@@ -631,20 +772,32 @@ export async function deleteReflection(
     return { success: false, error: 'User ID and Reflection ID are required' };
   }
 
-  // Always delete locally
+  // 1. Always delete locally first (instant UI update & offline durability)
   deleteLocalReflectionItem(userId, reflectionId);
 
-  if (isDailyQuotaExceeded || !auth.currentUser) {
+  // Determine effective authenticated user ID
+  const effectiveUserId = (auth.currentUser && auth.currentUser.uid) ? auth.currentUser.uid : userId;
+  if (effectiveUserId !== userId) {
+    deleteLocalReflectionItem(effectiveUserId, reflectionId);
+  }
+
+  // 2. If daily quota is exceeded, or unauthenticated, or guest mode, skip cloud call
+  if (isDailyQuotaExceeded || !auth.currentUser || effectiveUserId.startsWith('guest_') || userId.startsWith('guest_')) {
     return { success: true };
   }
 
   try {
-    const reflectionRef = doc(db, 'users', userId, 'reflections', reflectionId);
+    const reflectionRef = doc(db, 'users', effectiveUserId, 'reflections', reflectionId);
     await deleteDoc(reflectionRef);
     return { success: true };
   } catch (err: any) {
     if (isQuotaExceededError(err)) {
       setQuotaExceededState(true);
+      return { success: true };
+    }
+    // If the document has permission restrictions, was already deleted, or was created in guest mode
+    if (err?.code === 'permission-denied' || err?.message?.includes('insufficient permissions')) {
+      console.warn('Firestore deletion permission notice (item safely removed locally):', err?.message);
       return { success: true };
     }
     console.error('Error deleting reflection from Firestore:', err);
@@ -736,7 +889,18 @@ export function subscribeUserScrapbooks(
 
   // If quota is already exceeded or unauthenticated guest mode, don't attempt to open a listeners connection
   if (isDailyQuotaExceeded || !auth.currentUser) {
-    return () => {};
+    if (localBooks.length === 0) {
+      onData([]);
+    }
+
+    if (!localScrapbooksListeners[userId]) {
+      localScrapbooksListeners[userId] = new Set();
+    }
+    localScrapbooksListeners[userId].add(onData);
+
+    return () => {
+      localScrapbooksListeners[userId]?.delete(onData);
+    };
   }
 
   const scrapbooksCol = collection(db, 'users', userId, 'scrapbooks');
@@ -748,7 +912,13 @@ export function subscribeUserScrapbooks(
       (snapshot) => {
         const results: Scrapbook[] = [];
         snapshot.forEach((docSnap) => {
-          results.push(docSnap.data() as Scrapbook);
+          const cloudDoc = docSnap.data() as Scrapbook;
+          if (isStarterScrapbook(cloudDoc)) {
+            // Delete from Firestore so sample/test albums are permanently eliminated
+            deleteDoc(docSnap.ref).catch(() => {});
+            return;
+          }
+          results.push(cloudDoc);
         });
         saveLocalScrapbooks(userId, results);
         onData(results);
@@ -784,20 +954,30 @@ export async function deleteScrapbook(
     return { success: false, error: 'User ID and Scrapbook ID are required' };
   }
 
-  // Always delete locally
+  // 1. Always delete locally first
   deleteLocalScrapbookItem(userId, scrapbookId);
 
-  if (isDailyQuotaExceeded || !auth.currentUser) {
+  const effectiveUserId = (auth.currentUser && auth.currentUser.uid) ? auth.currentUser.uid : userId;
+  if (effectiveUserId !== userId) {
+    deleteLocalScrapbookItem(effectiveUserId, scrapbookId);
+  }
+
+  // 2. If daily quota is exceeded, or unauthenticated, or guest mode, skip cloud call
+  if (isDailyQuotaExceeded || !auth.currentUser || effectiveUserId.startsWith('guest_') || userId.startsWith('guest_')) {
     return { success: true };
   }
 
   try {
-    const scrapbookRef = doc(db, 'users', userId, 'scrapbooks', scrapbookId);
+    const scrapbookRef = doc(db, 'users', effectiveUserId, 'scrapbooks', scrapbookId);
     await deleteDoc(scrapbookRef);
     return { success: true };
   } catch (err: any) {
     if (isQuotaExceededError(err)) {
       setQuotaExceededState(true);
+      return { success: true };
+    }
+    if (err?.code === 'permission-denied' || err?.message?.includes('insufficient permissions')) {
+      console.warn('Firestore deletion permission notice (scrapbook safely removed locally):', err?.message);
       return { success: true };
     }
     console.error('Error deleting scrapbook from Firestore:', err);
@@ -816,10 +996,11 @@ export async function getScrapbook(userId: string, scrapbookId: string): Promise
   const found = localList.find(s => s.id === scrapbookId);
   if (found) return found;
 
-  if (isDailyQuotaExceeded || !auth.currentUser) return null;
+  const effectiveUserId = (auth.currentUser && auth.currentUser.uid) ? auth.currentUser.uid : userId;
+  if (isDailyQuotaExceeded || !auth.currentUser || effectiveUserId.startsWith('guest_')) return null;
 
   try {
-    const scrapbookRef = doc(db, 'users', userId, 'scrapbooks', scrapbookId);
+    const scrapbookRef = doc(db, 'users', effectiveUserId, 'scrapbooks', scrapbookId);
     const snap = await getDoc(scrapbookRef);
     if (snap.exists()) {
       return snap.data() as Scrapbook;

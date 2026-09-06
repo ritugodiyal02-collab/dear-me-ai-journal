@@ -19,17 +19,17 @@ import {
   deleteScrapbook as deleteScrapbookFromDb,
   subscribeUserScrapbooks,
   getUserProfile,
-  markUserScrapbooksInitialized,
   subscribeQuotaExceeded,
   getQuotaExceededState,
   isQuotaExceededError,
-  retryCloudSync
+  retryCloudSync,
+  isStarterScrapbook
 } from './lib/firestoreService';
-import { Menu, X, PlusCircle, AlertCircle, ExternalLink, RefreshCw } from 'lucide-react';
+import { Menu, X, PlusCircle, AlertCircle, ExternalLink, RefreshCw, BookOpen, Plus } from 'lucide-react';
 
 function createBlankReflection(userId: string): JournalReflection {
   return {
-    id: `ref-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    id: `ref_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
     userId,
     title: '',
     content: '',
@@ -42,324 +42,6 @@ function createBlankReflection(userId: string): JournalReflection {
     updatedAt: Date.now(),
     lastModelUsed: 'gemini-3.8-flash'
   };
-}
-
-function getInitialStarterScrapbooks(userId: string): Scrapbook[] {
-  return [
-    {
-      id: `scrapbook_raj_${userId}`,
-      userId,
-      title: 'Rajasthan',
-      subtitle: 'March 2026',
-      introduction: 'Exploring Rajasthan turned a simple journey into a tapestry of golden memories.',
-      theme: 'parchment',
-      coverColor: 'olive-green',
-      category: 'Travel',
-      date: 'March 2026',
-      location: 'Rajasthan, India',
-      quotePill: 'Collect moments, not things. ♡',
-      tabs: ['MEMORIES', 'PEOPLE', 'NOTES'],
-      coverImage: 'https://images.unsplash.com/photo-1599661046289-e31897846e41?auto=format&fit=crop&w=800&q=80',
-      sections: [
-        {
-          id: `sec_1_${Date.now()}`,
-          chapterNumber: 1,
-          heading: 'The Pink City',
-          narrative: 'Our journey began in Jaipur, the Pink City. Every corner had a story to tell and every color felt like a celebration.',
-          quote: 'The wind, the windows, and the whispers of history.',
-          photos: [
-            {
-              id: `photo_1_${Date.now()}`,
-              url: 'https://images.unsplash.com/photo-1599661046289-e31897846e41?auto=format&fit=crop&w=800&q=80',
-              caption: 'Hawa Mahal Wonders ♡',
-              rotation: 1,
-              tapeStyle: 'paperclip',
-              polaroidCaptionStyle: 'handwritten'
-            }
-          ],
-          ticketStub: {
-            location: 'JAIPUR, INDIA',
-            date: 'March 2026',
-            title: 'ADMIT ONE'
-          },
-          stickyNotes: [
-            {
-              id: `sn_1_${Date.now()}`,
-              text: 'Felt like stepping into a postcard! ☺',
-              color: 'yellow',
-              rotation: -2
-            }
-          ],
-          geminiReflectionNote: {
-            insight: 'You seemed most alive in the little unexpected moments. Your happiness comes from wonder and connection.',
-            sparkle: true
-          },
-          layout: 'polaroid'
-        },
-        {
-          id: `sec_2_${Date.now()}`,
-          chapterNumber: 2,
-          heading: 'Lakes & Palaces',
-          narrative: 'Udaipur felt like a dream. Calm waters, grand palaces and a sunset that stayed with me forever.',
-          quote: 'Some places don’t just look beautiful, they feel like home. ♡',
-          photos: [
-            {
-              id: `photo_2_${Date.now()}`,
-              url: 'https://images.unsplash.com/photo-1588096344356-9b578c772e29?auto=format&fit=crop&w=800&q=80',
-              caption: 'Lake Pichola Sunset ♡',
-              rotation: -1,
-              tapeStyle: 'washi-mint',
-              polaroidCaptionStyle: 'handwritten'
-            }
-          ],
-          ticketStub: {
-            location: 'UDAIPUR, INDIA',
-            date: 'March 2026',
-            title: 'FERRY PASS'
-          },
-          stickyNotes: [
-            {
-              id: `sn_2_${Date.now()}`,
-              text: 'The evening boat ride felt timeless ✨',
-              color: 'pink',
-              rotation: 2
-            }
-          ],
-          geminiReflectionNote: {
-            insight: 'Reflecting on Udaipur reveals your affinity for serene water and historic charm.',
-            sparkle: true
-          },
-          layout: 'polaroid'
-        },
-        {
-          id: `sec_3_${Date.now()}`,
-          chapterNumber: 3,
-          heading: 'The Blue Alleys',
-          narrative: 'Wandering through the cobalt lanes of Jodhpur. Children playing on sandstone steps and the smell of cardamom chai.',
-          quote: 'Every blue wall held a thousand quiet smiles.',
-          photos: [
-            {
-              id: `photo_3_${Date.now()}`,
-              url: 'https://images.unsplash.com/photo-1582510003544-4d00b7f74220?auto=format&fit=crop&w=800&q=80',
-              caption: 'Mehrangarh Fortress View ♡',
-              rotation: 1
-            }
-          ],
-          ticketStub: {
-            location: 'JODHPUR, INDIA',
-            date: 'March 2026',
-            title: 'CITADEL ENTRY'
-          },
-          stickyNotes: [
-            {
-              id: `sn_3_${Date.now()}`,
-              text: 'The spicy street chai was heavenly ☕',
-              color: 'yellow',
-              rotation: 1
-            }
-          ],
-          geminiReflectionNote: {
-            insight: 'Getting lost in local neighborhoods created your most authentic memories.',
-            sparkle: true
-          },
-          layout: 'polaroid'
-        }
-      ],
-      tags: ['Travel', 'Memories', 'Rajasthan'],
-      createdAt: Date.now() - 3600000 * 48,
-      updatedAt: Date.now() - 3600000 * 48
-    },
-    {
-      id: `scrapbook_coffee_${userId}`,
-      userId,
-      title: 'Weekend Calm',
-      subtitle: 'February 2026',
-      introduction: 'Slow mornings with pour-over coffee, vintage paper, and unhurried thoughts.',
-      theme: 'parchment',
-      coverColor: 'tan-leather',
-      category: 'Personal',
-      date: 'February 2026',
-      location: 'Local Artisan Roastery',
-      quotePill: 'Quiet minds, full hearts ✨',
-      tabs: ['BREW', 'PAGES', 'THOUGHTS'],
-      coverImage: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=800&q=80',
-      sections: [
-        {
-          id: `sec_c1_${Date.now()}`,
-          chapterNumber: 1,
-          heading: 'Morning Brew & Pages ☕',
-          narrative: 'The cafe was quiet when I arrived. Steam rising in gentle curls, jazz playing softly in the background, and nowhere else I needed to be.',
-          quote: 'Simplicity is the truest luxury.',
-          photos: [
-            {
-              id: `photo_c1_${Date.now()}`,
-              url: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=800&q=80',
-              caption: 'Pour Over Ritual ♡',
-              rotation: -1,
-              tapeStyle: 'paperclip',
-              polaroidCaptionStyle: 'handwritten'
-            }
-          ],
-          ticketStub: {
-            location: 'ROASTERY, DOWNTOWN',
-            date: 'Feb 2026',
-            title: 'TABLE 4 PASS'
-          },
-          stickyNotes: [
-            {
-              id: `sn_c1_${Date.now()}`,
-              text: 'Notes of dark chocolate & orange peel ☕',
-              color: 'yellow',
-              rotation: 1
-            }
-          ],
-          audioNote: {
-            transcript: 'Just the sound of the grinder and rain on the glass window. Absolute peace.',
-            duration: 45,
-            memoStickyNote: 'Rainy cafe ambient memo ☕'
-          },
-          geminiReflectionNote: {
-            insight: 'Rituals of stillness nurture your creativity and restore your inner balance.',
-            sparkle: true
-          },
-          layout: 'polaroid'
-        },
-        {
-          id: `sec_c2_${Date.now()}`,
-          chapterNumber: 2,
-          heading: 'Rain on the Windowpane',
-          narrative: 'Afternoon rain began tapping against the glass. Watching drops race each other while sketching in the margins of my notebook.',
-          quote: 'Let the rhythm of the rain wash away the hurry.',
-          photos: [
-            {
-              id: `photo_c2_${Date.now()}`,
-              url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80',
-              caption: 'Cozy Corner Sanctuary ♡',
-              rotation: 1,
-              tapeStyle: 'washi-mint',
-              polaroidCaptionStyle: 'handwritten'
-            }
-          ],
-          ticketStub: {
-            location: 'CORNER NOOK',
-            date: 'Feb 2026',
-            title: 'MUSE ENTRY'
-          },
-          stickyNotes: [
-            {
-              id: `sn_c2_${Date.now()}`,
-              text: 'Warm cinnamon roll on the side 🥐',
-              color: 'pink',
-              rotation: -1
-            }
-          ],
-          geminiReflectionNote: {
-            insight: 'Cozy environments unlock your deepest poetic thoughts and self-acceptance.',
-            sparkle: true
-          },
-          layout: 'polaroid'
-        }
-      ],
-      tags: ['Personal', 'Coffee', 'Mindfulness'],
-      createdAt: Date.now() - 3600000 * 24,
-      updatedAt: Date.now() - 3600000 * 24
-    },
-    {
-      id: `scrapbook_pines_${userId}`,
-      userId,
-      title: 'Alpine Trails',
-      subtitle: 'January 2026',
-      introduction: 'Crisp mountain air, pine scent, and climbing toward the morning sun.',
-      theme: 'parchment',
-      coverColor: 'deep-teal',
-      category: 'Milestones',
-      date: 'January 2026',
-      location: 'Pine Ridge Trail',
-      quotePill: 'Where the wild things are ✿',
-      tabs: ['SUMMIT', 'CAMP', 'STARGAZING'],
-      coverImage: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80',
-      sections: [
-        {
-          id: `sec_p1_${Date.now()}`,
-          chapterNumber: 1,
-          heading: 'Through the Pines 🌲',
-          narrative: 'We set out before dawn. The first light struck the snow-dusted peaks just as we cleared the tree line. The whole valley below was asleep.',
-          quote: 'The mountains are calling and I must go.',
-          photos: [
-            {
-              id: `photo_p1_${Date.now()}`,
-              url: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80',
-              caption: 'Summit at Sunrise ⛰',
-              rotation: 2,
-              tapeStyle: 'washi-yellow',
-              polaroidCaptionStyle: 'handwritten'
-            }
-          ],
-          ticketStub: {
-            location: 'TRAILHEAD 04',
-            date: 'Jan 2026',
-            title: 'PARK PASS'
-          },
-          stickyNotes: [
-            {
-              id: `sn_p1_${Date.now()}`,
-              text: 'Elevation 2,400m — breath caught in awe ✨',
-              color: 'mint',
-              rotation: -2
-            }
-          ],
-          audioNote: {
-            transcript: 'The wind through the high pines. Nothing else in the world mattered in that minute.',
-            duration: 60,
-            memoStickyNote: 'High pass wind recording 🌲'
-          },
-          geminiReflectionNote: {
-            insight: 'Adventure expands your perspective. You find strength in challenge and calm in vast landscapes.',
-            sparkle: true
-          },
-          layout: 'polaroid'
-        },
-        {
-          id: `sec_p2_${Date.now()}`,
-          chapterNumber: 2,
-          heading: 'Evening Campfire Glow 🔥',
-          narrative: 'We set up our tents by the alpine lake as twilight turned the water into violet glass. Hot soup and laughter under the constellations.',
-          quote: 'Wild air heals what the noise broke.',
-          photos: [
-            {
-              id: `photo_p2_${Date.now()}`,
-              url: 'https://images.unsplash.com/photo-1510312305653-8ed496efae75?auto=format&fit=crop&w=800&q=80',
-              caption: 'Twilight Basecamp ✨',
-              rotation: -1,
-              tapeStyle: 'kraft',
-              polaroidCaptionStyle: 'handwritten'
-            }
-          ],
-          ticketStub: {
-            location: 'ALPINE LAKE',
-            date: 'Jan 2026',
-            title: 'CAMP PERMIT'
-          },
-          stickyNotes: [
-            {
-              id: `sn_p2_${Date.now()}`,
-              text: 'Sleeping bag cozy, stars shining bright ⭐',
-              color: 'yellow',
-              rotation: 1
-            }
-          ],
-          geminiReflectionNote: {
-            insight: 'Unplugging completely in nature brings unmatched mental rejuvenation.',
-            sparkle: true
-          },
-          layout: 'polaroid'
-        }
-      ],
-      tags: ['Milestones', 'Hiking', 'Nature'],
-      createdAt: Date.now() - 3600000 * 12,
-      updatedAt: Date.now() - 3600000 * 12
-    }
-  ];
 }
 
 function MainApp() {
@@ -404,6 +86,18 @@ function MainApp() {
     });
   }, []);
 
+  // Hard session boundary guarantee: Whenever auth state or user changes (logout, login, account switch),
+  // immediately reset navigation back to the primary Reflections journal view and clear active selections.
+  useEffect(() => {
+    setActiveView('reflections');
+    setActiveReflection(null);
+    setActiveScrapbook(null);
+    setIsMobileSidebarOpen(false);
+    setIsCreateModalOpen(false);
+    setDeleteScrapbookTarget(null);
+    setDeleteReflectionTarget(null);
+  }, [currentUser?.uid]);
+
   // Toast Helpers
   const addToast = useCallback((type: 'success' | 'error' | 'info', title: string, description?: string) => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`;
@@ -434,7 +128,7 @@ function MainApp() {
     }
   };
 
-  // 1. Real-time Firestore Subscription for Reflections
+  // 1. Real-time Subscription for Reflections
   useEffect(() => {
     if (!currentUser?.uid) {
       setReflections([]);
@@ -444,26 +138,37 @@ function MainApp() {
     }
 
     setIsLoadingReflections(true);
+    const uid = currentUser.uid;
+    let isInitializedReflectionsDone = false;
+
+    // Safety timeout to ensure loading state resolves even under extreme network latency
+    const safetyTimer = setTimeout(() => {
+      setIsLoadingReflections(false);
+    }, 2500);
 
     const unsubscribe = subscribeUserReflections(
-      currentUser.uid,
-      (data) => {
-        setReflections(data);
+      uid,
+      async (data) => {
+        clearTimeout(safetyTimer);
+        // Ensure no default welcome reflections are ever shown for normal users or explorers
+        const cleanData = data.filter(
+          (d) => !d.id.startsWith('ref_welcome_') && d.title !== 'Welcome to My World 🌱'
+        );
+
+        setReflections(cleanData);
         setIsLoadingReflections(false);
 
-        // If no active reflection selected, select the latest one or create a new blank one
+        // If no active reflection selected, select the latest existing one or leave null
         setActiveReflection((current) => {
           if (current) {
-            const fresh = data.find((d) => d.id === current.id);
-            return fresh || (data.length > 0 ? data[0] : createBlankReflection(currentUser.uid));
+            const fresh = cleanData.find((d) => d.id === current.id);
+            return fresh || (cleanData.length > 0 ? cleanData[0] : null);
           }
-          if (data.length > 0) {
-            return data[0];
-          }
-          return createBlankReflection(currentUser.uid);
+          return cleanData.length > 0 ? cleanData[0] : null;
         });
       },
       (err) => {
+        clearTimeout(safetyTimer);
         if (!isQuotaExceededError(err)) {
           console.warn('Firestore subscription notice for reflections:', err);
         }
@@ -471,7 +176,10 @@ function MainApp() {
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(safetyTimer);
+      unsubscribe();
+    };
   }, [currentUser?.uid]);
 
   // 2. Real-time Firestore Subscription for Scrapbooks
@@ -484,43 +192,25 @@ function MainApp() {
     }
 
     setIsLoadingScrapbooks(true);
-    let isInitializedCheckDone = false;
     let unsubscribeScrapbooks: (() => void) | null = null;
     let isMounted = true;
 
     async function initScrapbooks() {
       if (!currentUser?.uid) return;
       const uid = currentUser.uid;
-      const profileDoc = await getUserProfile(uid);
-      if (!isMounted) return;
-
-      const alreadyInitialized = profileDoc?.hasInitializedScrapbooks === true ||
-        localStorage.getItem(`has_initialized_scrapbooks_${uid}`) === 'true';
 
       unsubscribeScrapbooks = subscribeUserScrapbooks(
         uid,
-        async (data) => {
+        (data) => {
           if (!isMounted) return;
-          if (data.length === 0 && !alreadyInitialized && !isInitializedCheckDone) {
-            isInitializedCheckDone = true;
-            await markUserScrapbooksInitialized(uid);
-            const starters = getInitialStarterScrapbooks(uid);
-            setScrapbooks(starters);
-            for (const book of starters) {
-              await saveScrapbook(uid, book);
-            }
-          } else {
-            isInitializedCheckDone = true;
-            if (!alreadyInitialized && data.length > 0) {
-              await markUserScrapbooksInitialized(uid);
-            }
-            setScrapbooks(data);
-          }
+          // Clean isolation: filter out any starter/mock scrapbooks
+          const userScrapbooks = data.filter((s) => !isStarterScrapbook(s));
+          setScrapbooks(userScrapbooks);
           setIsLoadingScrapbooks(false);
 
           setActiveScrapbook((current) => {
             if (current) {
-              const fresh = data.find((d) => d.id === current.id);
+              const fresh = userScrapbooks.find((d) => d.id === current.id);
               return fresh || null;
             }
             return null;
@@ -549,12 +239,16 @@ function MainApp() {
   // -------------------------------------------------------------
   // Reflection Handlers
   // -------------------------------------------------------------
-  const handleNewEntry = () => {
+  const handleNewEntry = async () => {
     if (!currentUser) return;
     const blank = createBlankReflection(currentUser.uid);
+    // Immediately add to reflections list so it appears in the sidebar right away!
+    setReflections((prev) => [blank, ...prev.filter((r) => r.id !== blank.id)]);
     setActiveReflection(blank);
     setActiveView('reflections');
     setIsMobileSidebarOpen(false);
+    // Persist the blank reflection immediately so it is registered across storage & cloud
+    await saveReflection(currentUser.uid, blank);
   };
 
   const handleSaveReflection = useCallback(async (reflectionToSave: JournalReflection): Promise<boolean> => {
@@ -567,6 +261,16 @@ function MainApp() {
     setIsSavingReflection(false);
     if (result.success) {
       setActiveReflection(reflectionToSave);
+      // Optimistically update reflections list immediately so sidebar reflects new title/content without delay
+      setReflections((prev) => {
+        const idx = prev.findIndex((r) => r.id === reflectionToSave.id);
+        if (idx !== -1) {
+          const next = [...prev];
+          next[idx] = reflectionToSave;
+          return next;
+        }
+        return [reflectionToSave, ...prev];
+      });
       return true;
     } else {
       setLastSaveError(result.error || 'Failed to save to Firestore');
@@ -603,7 +307,7 @@ function MainApp() {
       if (remaining.length > 0) {
         setActiveReflection(remaining[0]);
       } else {
-        setActiveReflection(createBlankReflection(currentUser.uid));
+        setActiveReflection(null);
       }
     }
 
@@ -697,19 +401,6 @@ function MainApp() {
       console.warn('Delete scrapbook error:', err);
       addToast('error', 'Delete Failed', err?.message || 'Could not delete scrapbook from database.');
     }
-  };
-
-  const handleLoadSampleScrapbooks = async () => {
-    if (!currentUser) return;
-    setIsLoadingScrapbooks(true);
-    const starters = getInitialStarterScrapbooks(currentUser.uid);
-    setScrapbooks(starters);
-    for (const book of starters) {
-      await saveScrapbook(currentUser.uid, book);
-    }
-    await markUserScrapbooksInitialized(currentUser.uid);
-    setIsLoadingScrapbooks(false);
-    addToast('success', '✨ Sample Albums Restored', 'Curated starter scrapbooks were added to your library.');
   };
 
   const handleStoryCreatedFromReflection = useCallback(async (storyDraft: Scrapbook) => {
@@ -832,7 +523,6 @@ function MainApp() {
             onCreateNewScrapbook={handleCreateNewScrapbook}
             onDeleteScrapbook={handleDeleteScrapbook}
             onOpenJournalMode={() => setActiveView('reflections')}
-            onLoadSampleScrapbooks={handleLoadSampleScrapbooks}
             isLoading={isLoadingScrapbooks}
           />
         )
@@ -894,14 +584,31 @@ function MainApp() {
               />
             </div>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-stone-500 bg-[#f4f2ee]">
-              <p className="font-serif font-semibold text-base text-stone-800 mb-3">No active reflection selected</p>
-              <button
-                onClick={handleNewEntry}
-                className="px-5 py-2.5 rounded-xl bg-[#455a47] hover:bg-[#364738] text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
-              >
-                Create New Entry
-              </button>
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#fbf9f4] m-3.5 rounded-2xl border border-stone-200/80 shadow-2xs">
+              <div className="w-14 h-14 rounded-2xl bg-white border border-stone-200/80 flex items-center justify-center text-[#3f5241] mb-4 shadow-2xs">
+                <BookOpen className="w-7 h-7 stroke-[1.5]" />
+              </div>
+              <h3 className="font-serif font-bold text-xl text-stone-900 mb-2">
+                A Quiet Space for Your Thoughts
+              </h3>
+              <p className="text-xs sm:text-sm text-stone-600 max-w-md mx-auto mb-6 leading-relaxed">
+                Take a pause, write freely, record voice notes, or capture everyday reflections. Your sanctuary is clean and ready.
+              </p>
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <button
+                  id="empty-state-new-reflection-btn"
+                  onClick={handleNewEntry}
+                  className="px-6 py-2.5 rounded-full bg-[#3f5241] hover:bg-[#344536] text-white text-xs font-semibold shadow-xs transition-all cursor-pointer flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Start New Reflection</span>
+                </button>
+                {currentUser.uid.startsWith('guest_') && (
+                  <span className="text-[11px] font-medium text-emerald-800 bg-emerald-50 border border-emerald-200/60 px-3 py-1.5 rounded-full">
+                    Explorer Mode • Ephemeral Sandbox
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
@@ -953,10 +660,18 @@ function MainApp() {
   );
 }
 
+function AuthenticatedShell() {
+  const { currentUser, loading } = useAuth();
+  // Keying MainApp by user ID (or 'logged-out') guarantees that whenever a user
+  // logs out or logs in with another account, the entire view state, navigation,
+  // and editor session are completely torn down and reset to initial defaults.
+  return <MainApp key={loading ? 'loading' : (currentUser?.uid || 'logged-out')} />;
+}
+
 export default function App() {
   return (
     <AuthProvider>
-      <MainApp />
+      <AuthenticatedShell />
     </AuthProvider>
   );
 }

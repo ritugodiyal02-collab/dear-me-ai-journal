@@ -6,7 +6,8 @@ import {
   Bookmark, 
   MoreVertical, 
   X,
-  BookOpen
+  BookOpen,
+  Plus
 } from 'lucide-react';
 
 interface HistorySidebarProps {
@@ -23,6 +24,7 @@ export function HistorySidebar({
   selectedId,
   onSelect,
   onDelete,
+  onNewEntry,
   isLoading
 }: HistorySidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -69,13 +71,26 @@ export function HistorySidebar({
           <h3 className="font-serif font-bold text-base text-stone-900 tracking-tight truncate">
             Past Reflections
           </h3>
-          <button
-            onClick={() => setIsSearchOpen(!isSearchOpen)}
-            title="Search reflections"
-            className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-50 transition-colors cursor-pointer shrink-0"
-          >
-            <Search className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {onNewEntry && (
+              <button
+                id="sidebar-new-reflection-btn"
+                onClick={onNewEntry}
+                title="Create new reflection"
+                className="px-2.5 py-1 rounded-lg text-[#2d4530] bg-[#f2f6f1] hover:bg-[#e4ede2] border border-[#dce8da] transition-all cursor-pointer flex items-center gap-1 text-xs font-semibold shadow-2xs"
+              >
+                <Plus className="w-3.5 h-3.5 text-[#3f5241]" />
+                <span>New</span>
+              </button>
+            )}
+            <button
+              onClick={() => setIsSearchOpen(!isSearchOpen)}
+              title="Search reflections"
+              className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-50 transition-colors cursor-pointer shrink-0"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          </div>
         </div>
         <p className="text-xs text-stone-400 font-normal mt-0.5 truncate">
           Your stories, always with you.

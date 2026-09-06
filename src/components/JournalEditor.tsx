@@ -107,6 +107,15 @@ export function JournalEditor({
 
   const audioNotesRef = useRef<AudioNote[]>(audioNotes);
   const imagesRef = useRef<JournalImage[]>(images);
+  const [isDirty, setIsDirty] = useState(false);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isDirtyRef = useRef(false);
+  const latestDataRef = useRef({ title, content, tags, mode, summary, keyInsights, actionItems });
+
+  useEffect(() => {
+    latestDataRef.current = { title, content, tags, mode, summary, keyInsights, actionItems };
+    isDirtyRef.current = isDirty;
+  }, [title, content, tags, mode, summary, keyInsights, actionItems, isDirty]);
 
   useEffect(() => {
     audioNotesRef.current = audioNotes;
@@ -285,6 +294,33 @@ export function JournalEditor({
 
   // Sync state when selected reflection changes
   useEffect(() => {
+    // If previous reflection had unsaved dirty changes, flush save
+    if (isDirtyRef.current) {
+      const d = latestDataRef.current;
+      onSave({
+        id: reflection.id,
+        userId: userId || reflection.userId || 'user',
+        title: d.title.trim() || 'Untitled Reflection',
+        content: d.content || '',
+        mode: d.mode || 'reflect',
+        tags: d.tags || [],
+        images: imagesRef.current,
+        audioNotes: audioNotesRef.current,
+        messages: messages,
+        summary: d.summary || '',
+        keyInsights: d.keyInsights || [],
+        actionItems: d.actionItems || [],
+        lastModelUsed: lastModelUsed,
+        createdAt: reflection.createdAt || Date.now(),
+        updatedAt: Date.now()
+      });
+    }
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+
     setTitle(reflection.title || '');
     setContent(reflection.content || '');
     setMode(reflection.mode || 'reflect');
@@ -301,7 +337,28 @@ export function JournalEditor({
     setActionItems(reflection.actionItems || []);
     setLastModelUsed(reflection.lastModelUsed || 'gemini-3.8-flash');
     setGenerationError(null);
+    setIsDirty(false);
+    isDirtyRef.current = false;
   }, [reflection.id]);
+
+  // Debounced auto-save for title, content, tags
+  useEffect(() => {
+    if (!isDirty) return;
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(async () => {
+      await handleSaveDocument();
+    }, 750);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [title, content, tags, isDirty]);
 
   // Auto-scroll chat when messages update
   useEffect(() => {
@@ -337,25 +394,41 @@ export function JournalEditor({
 
   // Manual or Triggered Save with clean payload
   const handleSaveDocument = async (override?: Partial<JournalReflection>) => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+
+    const currentTitle = override?.title !== undefined ? override.title : title;
+    const currentContent = override?.content !== undefined ? override.content : content;
+    const currentTags = override?.tags !== undefined ? override.tags : tags;
+    const currentMode = override?.mode !== undefined ? override.mode : mode;
+
     const updated: JournalReflection = {
       id: reflection.id,
       userId: userId || reflection.userId || 'user',
-      title: title.trim() || 'Untitled Reflection',
-      content: content || '',
-      mode: mode || 'reflect',
-      tags: tags || [],
+      title: currentTitle.trim() || 'Untitled Reflection',
+      content: currentContent || '',
+      mode: currentMode || 'reflect',
+      tags: currentTags || [],
       images: override?.images !== undefined ? override.images : imagesRef.current,
       audioNotes: override?.audioNotes !== undefined ? override.audioNotes : audioNotesRef.current,
-      messages: messages || [],
-      summary: summary || '',
-      keyInsights: keyInsights || [],
-      actionItems: actionItems || [],
-      lastModelUsed: lastModelUsed || 'gemini-3.8-flash',
+      messages: override?.messages !== undefined ? override.messages : messages,
+      summary: override?.summary !== undefined ? override.summary : summary,
+      keyInsights: override?.keyInsights !== undefined ? override.keyInsights : keyInsights,
+      actionItems: override?.actionItems !== undefined ? override.actionItems : actionItems,
+      lastModelUsed: override?.lastModelUsed !== undefined ? override.lastModelUsed : lastModelUsed,
       createdAt: reflection.createdAt || Date.now(),
       updatedAt: Date.now(),
       ...override
     };
-    return await onSave(updated);
+
+    const success = await onSave(updated);
+    if (success) {
+      setIsDirty(false);
+      isDirtyRef.current = false;
+    }
+    return success;
   };
 
   // Media Handlers
@@ -829,8 +902,13 @@ export function JournalEditor({
               id="reflection-title-input"
               type="text"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={() => handleSaveDocument()}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                setIsDirty(true);
+              }}
+              onBlur={() => {
+                if (isDirty) handleSaveDocument();
+              }}
               placeholder="Untitled Reflection"
               className="font-serif font-bold text-2xl sm:text-3xl text-stone-900 bg-transparent border-none focus:outline-none focus:ring-0 p-0 w-full placeholder:text-stone-300"
             />
@@ -844,14 +922,37 @@ export function JournalEditor({
               </span>
               <span>•</span>
               <div className="flex items-center gap-1.5 text-stone-600 font-medium">
-                <Cloud className="w-3.5 h-3.5 text-[#3f5241]" />
-                <span>{isSaving ? 'Saving...' : lastSaveError ? 'Save Failed' : 'Saved in Cloud'}</span>
+                <Cloud className={`w-3.5 h-3.5 ${isSaving ? 'text-amber-500 animate-pulse' : isDirty ? 'text-amber-500' : 'text-[#3f5241]'}`} />
+                <span>
+                  {isSaving 
+                    ? 'Saving...' 
+                    : lastSaveError 
+                    ? 'Save Failed' 
+                    : isDirty 
+                    ? 'Unsaved changes' 
+                    : 'Saved in Cloud'}
+                </span>
               </div>
             </div>
           </div>
 
           {/* Action buttons on header */}
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              id="save-reflection-manual-btn"
+              onClick={() => handleSaveDocument()}
+              disabled={isSaving}
+              title="Save reflection changes"
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs ${
+                isDirty
+                  ? 'bg-[#3f5241] hover:bg-[#324234] text-white border-[#3f5241]'
+                  : 'bg-[#f7f5ed] hover:bg-[#eae6d8] text-stone-700 border-stone-200'
+              }`}
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>{isSaving ? 'Saving...' : isDirty ? 'Save Entry' : 'Saved'}</span>
+            </button>
+
             <button
               id="create-story-album-button"
               onClick={handleCreateStoryFromReflection}
@@ -990,8 +1091,13 @@ export function JournalEditor({
                 ref={textareaRef}
                 id="journal-content-textarea"
                 value={content}
-                onChange={(e) => setContent(e.target.value)}
-                onBlur={() => handleSaveDocument()}
+                onChange={(e) => {
+                  setContent(e.target.value);
+                  setIsDirty(true);
+                }}
+                onBlur={() => {
+                  if (isDirty) handleSaveDocument();
+                }}
                 placeholder="What's on your mind today?&#10;Write freely about your experiences, realizations, challenges, or captured moments..."
                 className="w-full min-h-[220px] bg-transparent border-none focus:outline-none focus:ring-0 p-0 text-stone-700 text-sm sm:text-base leading-relaxed resize-none placeholder:text-stone-400 font-sans block shrink-0"
               />

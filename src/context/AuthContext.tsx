@@ -8,7 +8,7 @@ import {
   getRedirectResult,
   FirebaseUser 
 } from '../lib/firebase';
-import { syncUserProfile } from '../lib/firestoreService';
+import { syncUserProfile, clearEphemeralGuestData } from '../lib/firestoreService';
 import { UserProfile } from '../types';
 
 interface AuthContextType {
@@ -112,7 +112,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     setUnauthorizedDomain(null);
     try {
+      const priorGuestUid = (isGuest || currentUser?.uid?.startsWith('guest_')) ? currentUser?.uid : undefined;
       const user = await signInWithGoogle();
+      // If previously in ephemeral explorer mode, securely purge temporary guest storage
+      if (priorGuestUid) {
+        await clearEphemeralGuestData(priorGuestUid);
+      }
       const profile: UserProfile = {
         uid: user.uid,
         email: user.email,
@@ -124,6 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setCurrentUser(profile);
       setIsGuest(false);
       localStorage.removeItem('craft_guest_session');
+      localStorage.removeItem('craft_guest_uid');
       await syncUserProfile(profile);
     } catch (err: any) {
       const isUnauthorizedDomain = 
@@ -160,34 +166,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const handleContinueAsGuest = async () => {
     setError(null);
     setUnauthorizedDomain(null);
-    try {
-      // 1. Attempt anonymous Firebase auth if enabled
-      const anonUser = await signInAsGuest();
-      if (anonUser) {
-        const profile: UserProfile = {
-          uid: anonUser.uid,
-          email: null,
-          displayName: 'Explorer',
-          photoURL: null,
-          lastLoginAt: Date.now()
-        };
-        setFirebaseUser(anonUser);
-        setCurrentUser(profile);
-        setIsGuest(true);
-        localStorage.setItem('craft_guest_session', 'true');
-        localStorage.setItem('craft_guest_uid', anonUser.uid);
-        return;
-      }
-    } catch (e) {
-      console.warn('Anonymous auth attempt bypassed:', e);
-    }
+    // Option A: Ephemeral Sandbox for Explorer (Recommended for privacy)
+    // 1. Purge any prior guest data completely before creating a new sandbox
+    await clearEphemeralGuestData();
 
-    // 2. Fallback to resilient local session
-    let guestUid = localStorage.getItem('craft_guest_uid');
-    if (!guestUid) {
-      guestUid = `guest_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-      localStorage.setItem('craft_guest_uid', guestUid);
-    }
+    // 2. Provision a brand new, isolated ephemeral session
+    const guestUid = `guest_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    localStorage.setItem('craft_guest_uid', guestUid);
+    localStorage.setItem('craft_guest_session', 'true');
+
     const localProfile: UserProfile = {
       uid: guestUid,
       email: null,
@@ -197,13 +184,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
     setCurrentUser(localProfile);
     setIsGuest(true);
-    localStorage.setItem('craft_guest_session', 'true');
   };
 
   const handleSignOut = async () => {
     setError(null);
     setUnauthorizedDomain(null);
     try {
+      // Option A: Ephemeral Sandbox Cleanup on Explorer exit / logout
+      if (isGuest || currentUser?.uid?.startsWith('guest_')) {
+        await clearEphemeralGuestData(currentUser?.uid);
+      }
       localStorage.removeItem('craft_guest_session');
       localStorage.removeItem('craft_guest_uid');
       await signOutUser();
