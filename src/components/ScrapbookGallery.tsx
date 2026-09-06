@@ -139,8 +139,9 @@ export function ScrapbookGallery({
 
         {/* "New Scrapbook" Terracotta / Rose Button */}
         <button
+          id="btn-gallery-new-scrapbook"
           onClick={onCreateNewScrapbook}
-          className="flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-[#d97c7c] hover:bg-[#c96c6c] active:bg-[#b85e5e] text-white text-xs font-semibold shadow-md transition-all cursor-pointer hover:scale-103"
+          className="flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-[#963838] hover:bg-[#802c2c] active:bg-[#682222] text-white text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer hover:scale-103 border border-white/20"
         >
           <Plus className="w-4 h-4 stroke-[2.5]" />
           <span>New Scrapbook</span>
@@ -202,8 +203,9 @@ export function ScrapbookGallery({
 
             <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
               <button
+                id="btn-empty-create-scrapbook"
                 onClick={onCreateNewScrapbook}
-                className="px-5 py-2.5 rounded-full bg-[#d97c7c] hover:bg-[#c96c6c] text-white text-xs font-semibold shadow-xs cursor-pointer"
+                className="px-5 py-2.5 rounded-full bg-[#963838] hover:bg-[#802c2c] active:bg-[#682222] text-white text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer border border-white/20"
               >
                 Create New Scrapbook
               </button>

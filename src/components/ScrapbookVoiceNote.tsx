@@ -308,18 +308,83 @@ export function ScrapbookVoiceNote({
     commitNotes(filtered);
   };
 
-  // Provide a natural default audio memo if none is recorded yet so the layout matches the physical scrapbook reference
-  const displayNotes: ScrapbookAudioNoteItem[] = notes.length > 0 
-    ? notes 
-    : [
-        {
-          id: `default_memo_${chapterTitle}`,
-          url: '',
-          duration: 92, // 01:32
-          label: 'Spoken Reflection ♡',
-          transcript: `A spoken reflection for ${chapterTitle}`
-        }
-      ];
+  // Remove all voice notes from this chapter spread
+  const handleRemoveAllNotes = () => {
+    stopPlayback();
+    commitNotes([]);
+  };
+
+  // If no notes exist:
+  if (notes.length === 0) {
+    if (isRecording) {
+      return (
+        <div className="w-full max-w-[280px] sm:max-w-[310px] mx-auto bg-white/95 border border-[#dfd6c5] rounded-xl p-2.5 sm:p-3 shadow-xs shrink-0 my-2 relative transition-all">
+          <div className="flex items-center justify-between gap-2 bg-rose-50 border border-rose-200 rounded-lg p-2 animate-pulse">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping" />
+              <span className="text-xs font-semibold text-rose-800 font-hand-casual">
+                Recording Voice Memo ({formatTime(recordingSeconds)})
+              </span>
+            </div>
+            <button
+              onClick={stopRecording}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold shadow-xs cursor-pointer"
+            >
+              <Square className="w-2.5 h-2.5 fill-current" />
+              <span>Save</span>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (!isEditMode) {
+      return null;
+    }
+
+    return (
+      <div className="w-full max-w-[280px] sm:max-w-[310px] mx-auto shrink-0 my-1.5">
+        <input
+          type="file"
+          ref={fileAudioInputRef}
+          accept="audio/*"
+          onChange={handleAudioFileUpload}
+          className="hidden"
+        />
+        <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-dashed border-stone-300/90 bg-stone-50/70 hover:bg-stone-100/90 transition-colors">
+          <div className="flex items-center gap-1.5 text-stone-600 text-xs font-hand-casual">
+            <Volume2 className="w-3.5 h-3.5 text-stone-500" />
+            <span>Voice Memo (Optional)</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              id="btn-voice-note-add-record"
+              onClick={() => startRecording()}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 text-[10px] font-semibold transition-colors cursor-pointer"
+              title="Record voice note"
+            >
+              <Mic className="w-2.5 h-2.5 text-rose-600" />
+              <span>Record</span>
+            </button>
+            <button
+              id="btn-voice-note-add-upload"
+              onClick={() => fileAudioInputRef.current?.click()}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-600 text-[10px] transition-colors cursor-pointer"
+              title="Upload audio file"
+            >
+              <Upload className="w-2.5 h-2.5" />
+              <span>Upload</span>
+            </button>
+          </div>
+        </div>
+        {recordError && (
+          <p className="text-[9px] text-rose-600 mt-1 bg-rose-50 p-1 rounded-sm border border-rose-200">
+            {recordError}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-[280px] sm:max-w-[310px] mx-auto bg-white/95 border border-[#dfd6c5] rounded-xl p-2.5 sm:p-3 shadow-xs shrink-0 my-2 relative transition-all">
@@ -361,6 +426,15 @@ export function ScrapbookVoiceNote({
             >
               <Upload className="w-2.5 h-2.5" />
             </button>
+            <button
+              id="btn-remove-voice-note-card"
+              onClick={handleRemoveAllNotes}
+              className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 hover:text-rose-900 text-[9px] font-semibold transition-colors cursor-pointer ml-0.5"
+              title="Remove voice note from chapter"
+            >
+              <Trash2 className="w-2.5 h-2.5" />
+              <span>Remove</span>
+            </button>
           </div>
         )}
       </div>
@@ -390,19 +464,18 @@ export function ScrapbookVoiceNote({
       {/* CLEAN VOICE NOTE PLAYER CARD (MATCHING REFERENCE IMAGE) */}
       {/* ------------------------------------------------------------- */}
       <div className="space-y-2">
-        {displayNotes.map((note, idx) => {
+        {notes.map((note, idx) => {
           const isThisPlaying = playingNoteId === note.id || (playingNoteId === null && isStorytellerPlaying && note.id.startsWith('default_memo'));
-          const isRealCustom = notes.some(n => n.id === note.id);
           
           return (
             <div 
               key={note.id || idx}
-              className="flex items-center gap-2.5 py-1 px-0.5"
+              className="flex items-center gap-2.5 py-1 px-0.5 group"
             >
               {/* Dark Circular Play Button */}
               <button
                 onClick={() => {
-                  if (isRealCustom) {
+                  if (note.url) {
                     handleTogglePlayNote(note);
                   } else {
                     handleToggleStoryteller();
@@ -421,7 +494,7 @@ export function ScrapbookVoiceNote({
               {/* Sage Green Waveform Audio Bars */}
               <div 
                 onClick={() => {
-                  if (isRealCustom) {
+                  if (note.url) {
                     handleTogglePlayNote(note);
                   } else {
                     handleToggleStoryteller();
@@ -452,14 +525,15 @@ export function ScrapbookVoiceNote({
                   : (note.duration ? formatTime(note.duration) : '01:32')}
               </span>
 
-              {/* Delete Button for Custom Notes in Edit Mode */}
-              {isEditMode && isRealCustom && (
+              {/* Delete Button for Notes in Edit Mode */}
+              {isEditMode && (
                 <button
+                  id={`btn-delete-voice-note-${note.id}`}
                   onClick={() => handleDeleteNote(note.id)}
-                  className="w-5 h-5 rounded-full hover:bg-rose-50 text-stone-400 hover:text-rose-600 flex items-center justify-center transition-colors cursor-pointer shrink-0 ml-0.5"
-                  title="Delete this voice note"
+                  className="w-6 h-6 rounded-full hover:bg-rose-100 text-stone-400 hover:text-rose-700 flex items-center justify-center transition-colors cursor-pointer shrink-0 ml-0.5"
+                  title="Remove this voice note"
                 >
-                  <Trash2 className="w-2.5 h-2.5" />
+                  <Trash2 className="w-3 h-3" />
                 </button>
               )}
             </div>

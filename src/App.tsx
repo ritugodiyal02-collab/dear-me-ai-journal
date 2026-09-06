@@ -557,7 +557,7 @@ function MainApp() {
     setIsMobileSidebarOpen(false);
   };
 
-  const handleSaveReflection = async (reflectionToSave: JournalReflection): Promise<boolean> => {
+  const handleSaveReflection = useCallback(async (reflectionToSave: JournalReflection): Promise<boolean> => {
     if (!currentUser) return false;
     setIsSavingReflection(true);
     setLastSaveError(null);
@@ -573,13 +573,13 @@ function MainApp() {
       addToast('error', 'Save Failed', result.error || 'Firestore write was rejected.');
       return false;
     }
-  };
+  }, [currentUser, addToast]);
 
-  const handleRetrySaveReflection = () => {
+  const handleRetrySaveReflection = useCallback(() => {
     if (activeReflection) {
       handleSaveReflection(activeReflection);
     }
-  };
+  }, [activeReflection, handleSaveReflection]);
 
   const handleDeleteReflection = (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -651,7 +651,7 @@ function MainApp() {
     }
   };
 
-  const handleSaveScrapbook = async (updated: Scrapbook) => {
+  const handleSaveScrapbook = useCallback(async (updated: Scrapbook) => {
     if (!currentUser) return;
     setIsSavingScrapbook(true);
     // Optimistically update state immediately
@@ -663,9 +663,9 @@ function MainApp() {
     if (!result.success) {
       addToast('error', 'Album Save Failed', result.error || 'Could not save scrapbook to Firestore.');
     }
-  };
+  }, [currentUser, addToast]);
 
-  const handleDeleteScrapbook = (id: string, title?: string, e?: React.MouseEvent) => {
+  const handleDeleteScrapbook = useCallback((id: string, title?: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (!currentUser) return;
     const album = scrapbooks.find((s) => s.id === id);
@@ -673,7 +673,7 @@ function MainApp() {
       id,
       title: title || album?.title || 'Scrapbook Album'
     });
-  };
+  }, [currentUser, scrapbooks]);
 
   const executeDeleteScrapbook = async () => {
     if (!currentUser || !deleteScrapbookTarget) return;
@@ -712,7 +712,7 @@ function MainApp() {
     addToast('success', '✨ Sample Albums Restored', 'Curated starter scrapbooks were added to your library.');
   };
 
-  const handleStoryCreatedFromReflection = async (storyDraft: Scrapbook) => {
+  const handleStoryCreatedFromReflection = useCallback(async (storyDraft: Scrapbook) => {
     if (!currentUser) return;
     // 1. Immediately add to scrapbooks state and open the album
     setScrapbooks((prev) => [storyDraft, ...prev.filter((s) => s.id !== storyDraft.id)]);
@@ -726,7 +726,7 @@ function MainApp() {
     } catch (err) {
       console.warn('Background save for story album completed locally:', err);
     }
-  };
+  }, [currentUser, addToast]);
 
   if (authLoading) {
     return (

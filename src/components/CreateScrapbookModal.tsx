@@ -499,11 +499,13 @@ export function CreateScrapbookModal({
           </button>
 
           <button
+            id="btn-create-scrapbook-confirm"
             onClick={handleCreate}
-            className="flex items-center gap-1.5 px-6 py-2.5 rounded-full bg-[#d97c7c] hover:bg-[#c96c6c] active:bg-[#b85e5e] text-white text-xs font-bold shadow-md hover:scale-102 transition-all cursor-pointer"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#963838] hover:bg-[#802c2c] active:bg-[#682222] text-white text-xs font-bold shadow-md hover:shadow-lg hover:scale-102 transition-all cursor-pointer border border-white/20"
           >
-            <Sparkles className="w-4 h-4" />
+            <Sparkles className="w-4 h-4 text-amber-200 animate-pulse" />
             <span>Create & Open Scrapbook</span>
+            <span className="text-[10px] bg-white/20 text-white px-2 py-0.5 rounded-full font-sans ml-0.5">Ready</span>
           </button>
         </div>
 

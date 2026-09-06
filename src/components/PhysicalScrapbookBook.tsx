@@ -262,11 +262,6 @@ export function PhysicalScrapbookBook({
   // Total spreads corresponds directly to the real number of chapters
   const totalSpreads = scrapbook.sections.length;
 
-  // Sync initialScrapbook when prop changes
-  useEffect(() => {
-    setScrapbook(initialScrapbook);
-  }, [initialScrapbook]);
-
   // Synchronize state with browser native Fullscreen API changes
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -358,10 +353,25 @@ export function PhysicalScrapbookBook({
   latestScrapbookRef.current = scrapbook;
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Sync state if initialScrapbook ID changes
+  useEffect(() => {
+    setScrapbook(initialScrapbook);
+    latestScrapbookRef.current = initialScrapbook;
+    setCurrentSpreadIndex(initialScrapbook.sections.length > 0 ? 1 : 0);
+  }, [initialScrapbook.id]);
+
+  const onSaveRef = useRef(onSave);
+  useEffect(() => {
+    onSaveRef.current = onSave;
+  }, [onSave]);
+
+  // Flush any pending unsaved debounced changes strictly upon unmount
   useEffect(() => {
     return () => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+        onSaveRef.current(latestScrapbookRef.current);
       }
     };
   }, []);
@@ -1166,7 +1176,7 @@ export function PhysicalScrapbookBook({
                       <button
                         key={cKey}
                         onClick={() => {
-                          updateScrapbookState({ coverColor: cKey });
+                          updateScrapbookState({ coverColor: cKey }, true);
                           setIsEditingCoverTheme(false);
                         }}
                         className={`flex items-center gap-1.5 p-1.5 rounded-lg text-left text-xs font-medium border transition-all cursor-pointer ${
@@ -1446,12 +1456,12 @@ export function PhysicalScrapbookBook({
                 </p>
 
                 {/* Center Polaroid Photo or Embossed Seal on Cover */}
-                {Boolean(scrapbook.coverImage || scrapbook.sections[0]?.photos?.[0]?.url) ? (
+                {Boolean(scrapbook.coverImage && scrapbook.coverImage.trim().length > 0) ? (
                   <div className="relative mx-auto mt-1 inline-block transform -rotate-1 hover:rotate-0 transition-transform duration-300">
                     <div className="polaroid-frame bg-white w-32 sm:w-38 p-1.5 pb-3.5 rounded-xs shadow-xl">
                       <div className="w-full h-26 sm:h-32 bg-stone-200 overflow-hidden relative group rounded-2xs">
                         <img
-                          src={scrapbook.coverImage || scrapbook.sections[0]?.photos?.[0]?.url}
+                          src={scrapbook.coverImage}
                           alt={scrapbook.title}
                           className="w-full h-full object-cover"
                         />
@@ -1459,19 +1469,17 @@ export function PhysicalScrapbookBook({
                           <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-1.5 text-white text-xs font-semibold cursor-pointer">
                             <button
                               onClick={() => handleOpenPhotoPicker(0, true)}
-                              className="px-2 py-0.5 rounded-full bg-white/90 hover:bg-white text-stone-900 text-[10px] flex items-center gap-1 shadow-sm"
+                              className="px-2 py-0.5 rounded-full bg-white/90 hover:bg-white text-stone-900 text-[10px] flex items-center gap-1 shadow-sm cursor-pointer"
                             >
                               <Camera className="w-3 h-3" />
                               <span>Change Photo</span>
                             </button>
                             <button
+                              id="btn-remove-cover-photo"
                               onClick={() => {
-                                onSave({
-                                  ...scrapbook,
-                                  coverImage: undefined
-                                });
+                                updateScrapbookState({ coverImage: '' }, true);
                               }}
-                              className="px-2 py-0.5 rounded-full bg-rose-700/90 hover:bg-rose-700 text-white text-[10px] flex items-center gap-1 shadow-sm"
+                              className="px-2 py-0.5 rounded-full bg-rose-700/90 hover:bg-rose-700 text-white text-[10px] flex items-center gap-1 shadow-sm cursor-pointer"
                             >
                               <Trash2 className="w-3 h-3" />
                               <span>Remove</span>
@@ -1486,7 +1494,7 @@ export function PhysicalScrapbookBook({
                     </div>
                   </div>
                 ) : (
-                  /* No cover photo provided */
+                  /* No cover photo provided - Clean Vintage Leather Seal */
                   <div className="relative mx-auto my-2 flex flex-col items-center">
                     <div className="w-28 h-28 rounded-full border-2 border-dashed border-amber-200/30 bg-black/20 flex flex-col items-center justify-center p-3 text-center shadow-inner">
                       <DaisyFlower className="w-8 h-8 transform rotate-12 drop-shadow-sm mb-1" />
@@ -1496,6 +1504,7 @@ export function PhysicalScrapbookBook({
                     </div>
                     {isEditMode && (
                       <button
+                        id="btn-add-cover-photo"
                         onClick={() => handleOpenPhotoPicker(0, true)}
                         className="mt-2 px-3 py-1 rounded-full bg-white/90 hover:bg-white text-stone-900 text-[10px] font-semibold flex items-center gap-1 shadow-md cursor-pointer transition-colors"
                       >
@@ -1606,19 +1615,22 @@ export function PhysicalScrapbookBook({
                     <div className="shrink-0 mb-1.5">
                       {isEditMode ? (
                         <input
+                          id="input-chapter-heading"
                           type="text"
-                          value={currentSection.heading || `New Horizon`}
+                          value={currentSection.heading ?? ''}
                           onChange={(e) => updateCurrentSection({ heading: e.target.value })}
-                          className="w-full font-serif-title font-bold text-lg sm:text-xl lg:text-2xl text-[#2a2016] bg-transparent border-b border-dashed border-stone-400 focus:border-stone-800 focus:outline-none"
-                          placeholder="Chapter Title ♡"
+                          className="w-full font-serif-title font-bold text-lg sm:text-xl lg:text-2xl text-[#2a2016] bg-transparent border-b border-dashed border-stone-400 focus:border-stone-800 focus:outline-none placeholder:text-stone-400/80"
+                          placeholder="Chapter Title (optional) ♡"
                         />
                       ) : (
-                        <h2 className="font-serif-title font-bold text-lg sm:text-xl lg:text-2xl text-[#2a2016] tracking-tight leading-snug flex items-center flex-wrap gap-1.5">
-                          <span>
-                            {(currentSection.heading || 'New Horizon').replace(/^chapter\s*\d+[:\-]?\s*/i, '')}
-                          </span>
-                          <span className="font-handwriting text-rose-400 text-lg font-bold">♡</span>
-                        </h2>
+                        (currentSection.heading && currentSection.heading.trim().length > 0) ? (
+                          <h2 className="font-serif-title font-bold text-lg sm:text-xl lg:text-2xl text-[#2a2016] tracking-tight leading-snug flex items-center flex-wrap gap-1.5">
+                            <span>
+                              {currentSection.heading.replace(/^chapter\s*\d+[:\-]?\s*/i, '') || currentSection.heading}
+                            </span>
+                            <span className="font-handwriting text-rose-400 text-lg font-bold">♡</span>
+                          </h2>
+                        ) : null
                       )}
                     </div>
 
@@ -1774,11 +1786,7 @@ export function PhysicalScrapbookBook({
                       const validPhotos = (currentSection.photos || []).filter((p) => Boolean(p && p.url));
                       
                       if (validPhotos.length === 0) {
-                        /* 0 PHOTOS: SHOW DEFAULT GOLDEN HOUR POLAROID WITH ADD/CUSTOMIZE OPTION */
-                        const fallbackPhoto = {
-                          url: 'https://images.unsplash.com/photo-1599661046289-e31897846e41?auto=format&fit=crop&w=800&q=80',
-                          caption: 'Golden Hour Memories ♡'
-                        };
+                        /* 0 PHOTOS: SHOW TACTILE EMPTY SCRAPBOOK PHOTO SLOT (NO MOCK/FAKE IMAGES) */
                         return (
                           <div className="relative mx-auto my-1 w-full max-w-[270px] sm:max-w-[300px] transform rotate-[0.5deg] hover:rotate-0 transition-transform duration-300">
                             {/* Gold Paperclip */}
@@ -1791,32 +1799,44 @@ export function PhysicalScrapbookBook({
                               <WashiTapeStrip color="kraft" className="w-8 h-2 text-[6px]" />
                             </div>
 
-                            {/* Polaroid Frame */}
+                            {/* Polaroid Frame with Empty Photo Slot */}
                             <div className="polaroid-frame bg-white p-2 pb-2.5 rounded-xs shadow-md border border-stone-200/60 relative z-10">
-                              <div className="relative w-full aspect-[4/3] max-h-[175px] sm:max-h-[195px] bg-[#f5efe4] overflow-hidden group rounded-2xs border border-stone-200/60 flex items-center justify-center">
-                                <img
-                                  src={fallbackPhoto.url}
-                                  alt={fallbackPhoto.caption}
-                                  className="w-full h-full object-cover"
-                                />
+                              <div
+                                onClick={isEditMode ? () => handleOpenPhotoPicker(currentSpreadIndex - 1, false, undefined, 'add') : undefined}
+                                className={`relative w-full aspect-[4/3] max-h-[175px] sm:max-h-[195px] bg-[#faf6ef] overflow-hidden group rounded-2xs border-2 border-dashed border-[#d8cdbc] flex flex-col items-center justify-center p-3 text-center transition-all ${
+                                  isEditMode ? 'cursor-pointer hover:bg-[#f5eee0] hover:border-[#3b4834]/50' : ''
+                                }`}
+                              >
+                                <div className="w-10 h-10 rounded-full bg-white/90 border border-[#dfd4be] flex items-center justify-center text-[#786654] mb-1.5 shadow-2xs group-hover:scale-105 transition-transform">
+                                  <Camera className="w-5 h-5 text-[#5c4938]" />
+                                </div>
+
+                                <p className="font-handwriting text-sm sm:text-base font-bold text-[#3d2f21]">
+                                  {isEditMode ? 'Attach Chapter Photo' : 'No Photo Attached'}
+                                </p>
+                                <p className="text-[10px] text-stone-500 font-serif italic mt-0.5 max-w-[190px] leading-tight">
+                                  {isEditMode ? 'Click to upload or pick a photo for this chapter' : 'Awaiting a captured keepsake ♡'}
+                                </p>
 
                                 {isEditMode && (
-                                  <div className="absolute inset-0 bg-black/45 flex items-center justify-center gap-1.5 transition-opacity opacity-0 group-hover:opacity-100 flex-wrap p-1">
-                                    <button
-                                      onClick={() => handleOpenPhotoPicker(currentSpreadIndex - 1, false, undefined, 'add')}
-                                      className="px-2.5 py-1 rounded-full bg-[#3b4834] hover:bg-[#2c3727] text-white text-[10px] font-semibold flex items-center gap-1 shadow-md cursor-pointer"
-                                    >
-                                      <Plus className="w-3 h-3" />
-                                      <span>Upload Your Photo</span>
-                                    </button>
-                                  </div>
+                                  <button
+                                    id="btn-add-chapter-photo-slot"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenPhotoPicker(currentSpreadIndex - 1, false, undefined, 'add');
+                                    }}
+                                    className="mt-2.5 px-3 py-1 rounded-full bg-[#3b4834] hover:bg-[#2c3727] text-white text-[10px] font-semibold flex items-center gap-1 shadow-xs cursor-pointer transition-colors"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                    <span>Add Photo</span>
+                                  </button>
                                 )}
                               </div>
 
-                              {/* Caption */}
-                              <div className="mt-1 text-center">
-                                <p className="font-handwriting text-sm sm:text-base font-bold text-center text-[#2d2116] tracking-wide">
-                                  {fallbackPhoto.caption}
+                              {/* Caption Slot */}
+                              <div className="mt-1.5 text-center">
+                                <p className="font-handwriting text-xs text-stone-400 italic">
+                                  {isEditMode ? 'Awaiting photo caption...' : 'Chapter Memories ♡'}
                                 </p>
                               </div>
                             </div>

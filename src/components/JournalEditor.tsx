@@ -759,7 +759,7 @@ export function JournalEditor({
         location: storyData.location || '',
         quotePill: 'Collect moments, not things. ♡',
         tabs: ['MEMORIES', 'PEOPLE', 'NOTES'],
-        coverImage: images[0]?.url || 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=800&q=80',
+        coverImage: images[0]?.url || undefined,
         sourceReflectionId: reflection.id,
         sections: structuredSections.length > 0 ? structuredSections : [
           {
