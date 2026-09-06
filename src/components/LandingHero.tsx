@@ -165,7 +165,7 @@ export function LandingHero({ onOpenSecurity }: LandingHeroProps) {
                   </button>
 
                   <a
-                    href="https://console.firebase.google.com/project/gen-lang-client-0187697001/authentication/settings"
+                    href="https://console.firebase.google.com/project/dearme-da2e5/authentication/settings"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="px-3 py-2 rounded-xl bg-white hover:bg-stone-100 border border-stone-300 text-stone-700 text-xs font-semibold inline-flex items-center gap-1.5 transition-colors"

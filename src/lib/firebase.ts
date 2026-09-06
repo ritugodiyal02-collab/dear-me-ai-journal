@@ -4,6 +4,7 @@ import {
   GoogleAuthProvider, 
   signInWithPopup, 
   signInWithRedirect,
+  getRedirectResult,
   signInAnonymously,
   signOut as fbSignOut,
   onAuthStateChanged,
@@ -76,5 +77,5 @@ export async function signOutUser(): Promise<void> {
   await fbSignOut(auth);
 }
 
-export { onAuthStateChanged };
+export { onAuthStateChanged, getRedirectResult };
 export type { FirebaseUser };

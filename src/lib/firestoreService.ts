@@ -14,6 +14,7 @@ import {
   enableNetwork
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
+import firebaseConfigJson from '../../firebase-applet-config.json';
 import { JournalReflection, UserProfile, Scrapbook } from '../types';
 import { idbSet, idbGet } from './idbStorage';
 
@@ -81,32 +82,39 @@ export function isQuotaExceededError(err: unknown): boolean {
   );
 }
 
-// Global state tracking whether daily quota is reached
-const LS_QUOTA_KEY = 'firestore_daily_write_quota_exceeded_timestamp';
+// Clear legacy global quota flag from previous projects
+try {
+  localStorage.removeItem('firestore_daily_write_quota_exceeded_timestamp');
+} catch {}
+
+// Project-specific state tracking whether daily quota is reached
+const LS_QUOTA_KEY = `firestore_quota_exceeded_${firebaseConfigJson.projectId}`;
 
 function checkInitialQuotaExceeded(): boolean {
   try {
     const raw = localStorage.getItem(LS_QUOTA_KEY);
-    if (raw === 'false') return false;
-    if (raw) {
-      const recordedTime = parseInt(raw, 10);
-      // Quota resets daily. If flagged within the last 24 hours, consider quota still exceeded.
-      if (!isNaN(recordedTime) && Date.now() - recordedTime < 24 * 60 * 60 * 1000) {
-        return true;
-      }
+    if (!raw || raw === 'false') return false;
+    const recordedTime = parseInt(raw, 10);
+    // Quota resets daily. If flagged within the last 24 hours on THIS project, consider quota still exceeded.
+    if (!isNaN(recordedTime) && Date.now() - recordedTime < 24 * 60 * 60 * 1000) {
+      return true;
     }
   } catch {}
-  // Default to true because the free daily write units limit is currently active on this project
-  return true;
+  // Default to healthy for newly connected projects
+  return false;
 }
 
 let isDailyQuotaExceeded = checkInitialQuotaExceeded();
 const quotaListeners = new Set<(exceeded: boolean) => void>();
 
-// If quota is already exceeded, gracefully suspend network to prevent retry backoff logs
+// Ensure network is enabled for healthy projects, or suspended if quota actually reached
 if (isDailyQuotaExceeded) {
   try {
     disableNetwork(db).catch(() => {});
+  } catch {}
+} else {
+  try {
+    enableNetwork(db).catch(() => {});
   } catch {}
 }
 
@@ -371,6 +379,67 @@ export async function markUserScrapbooksInitialized(userId: string): Promise<voi
 }
 
 /**
+ * Calculates estimated document size in bytes for Firestore (1,048,576 bytes limit)
+ */
+export function getEstimatedDocumentSize(obj: any): number {
+  try {
+    return new TextEncoder().encode(JSON.stringify(obj)).length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Prepares a safe, lightweight cloud payload for Firestore.
+ * Strips raw heavy media data URLs if approaching the 1MB Firestore document limit,
+ * while preserving transcripts, note metadata, text, insights, and thumbnails.
+ * (The full original audio and images remain safely stored locally in IndexedDB).
+ */
+export function prepareCloudReflectionPayload(reflection: JournalReflection): Record<string, any> {
+  const cloudCopy: any = { ...reflection };
+  let currentBytes = getEstimatedDocumentSize(cloudCopy);
+
+  // If already under 500KB, it is safe to write directly
+  if (currentBytes < 500000) {
+    return cleanPayload(cloudCopy);
+  }
+
+  // 1. In audio notes: omit heavy base64 data URLs in the cloud document
+  if (Array.isArray(cloudCopy.audioNotes) && cloudCopy.audioNotes.length > 0) {
+    cloudCopy.audioNotes = cloudCopy.audioNotes.map((note: any) => {
+      const isLargeDataUrl = typeof note.url === 'string' && note.url.startsWith('data:') && note.url.length > 25000;
+      return {
+        ...note,
+        url: isLargeDataUrl ? '' : note.url, // Full audio note preserved locally in IndexedDB
+        base64: undefined // Never store duplicate base64 in Firestore
+      };
+    });
+    currentBytes = getEstimatedDocumentSize(cloudCopy);
+  }
+
+  // 2. In images: if still large, truncate data URL if oversized
+  if (currentBytes > 500000 && Array.isArray(cloudCopy.images)) {
+    cloudCopy.images = cloudCopy.images.map((img: any) => {
+      if (typeof img.url === 'string' && img.url.length > 120000) {
+        return {
+          ...img,
+          url: img.url.slice(0, 80000)
+        };
+      }
+      return img;
+    });
+    currentBytes = getEstimatedDocumentSize(cloudCopy);
+  }
+
+  // 3. In messages: trim historical messages if document is still massive
+  if (currentBytes > 750000 && Array.isArray(cloudCopy.messages) && cloudCopy.messages.length > 25) {
+    cloudCopy.messages = cloudCopy.messages.slice(-25);
+  }
+
+  return cleanPayload(cloudCopy);
+}
+
+/**
  * Save or update a Journal Reflection in /users/{userId}/reflections/{reflectionId}
  * Isolated strictly to the authenticated user.
  */
@@ -378,7 +447,10 @@ export async function saveReflection(
   userId: string, 
   reflection: JournalReflection
 ): Promise<{ success: boolean; id: string; error?: string; isLocalFallback?: boolean }> {
-  if (!userId) {
+  // Always prioritize the active authenticated user ID to prevent permission mismatches
+  const effectiveUserId = (auth.currentUser && auth.currentUser.uid) ? auth.currentUser.uid : userId;
+
+  if (!effectiveUserId) {
     return { success: false, id: reflection.id, error: 'Authentication required: Missing userId' };
   }
   if (!reflection.id) {
@@ -387,12 +459,12 @@ export async function saveReflection(
 
   const cleaned = cleanPayload({
     ...reflection,
-    userId,
+    userId: effectiveUserId,
     updatedAt: Date.now()
   });
 
-  // 1. Always save to local storage first (instant durability)
-  saveLocalReflectionItem(userId, cleaned);
+  // 1. Always save the FULL fidelity reflection to local storage & IndexedDB first (zero data loss)
+  saveLocalReflectionItem(effectiveUserId, cleaned);
 
   // 2. If quota is already exhausted or unauthenticated guest mode, return local fallback success
   if (isDailyQuotaExceeded || !auth.currentUser) {
@@ -400,10 +472,39 @@ export async function saveReflection(
   }
 
   try {
-    const reflectionRef = doc(db, 'users', userId, 'reflections', reflection.id);
-    await setDoc(reflectionRef, cleaned, { merge: true });
+    const cloudPayload = prepareCloudReflectionPayload(cleaned);
+    const reflectionRef = doc(db, 'users', effectiveUserId, 'reflections', reflection.id);
+    await setDoc(reflectionRef, cloudPayload, { merge: true });
     return { success: true, id: reflection.id };
   } catch (err: any) {
+    const errMsg = err?.message || String(err);
+
+    // Auto-recovery if document size limit (1MB) was encountered
+    if (errMsg.includes('exceeds the maximum allowed size') || errMsg.includes('1,048,576 bytes')) {
+      console.warn('Firestore 1MB limit encountered. Pruning heavy audio/image data for cloud sync...');
+      try {
+        const leanPayload = cleanPayload({
+          ...cleaned,
+          audioNotes: (cleaned.audioNotes || []).map((an: any) => ({
+            ...an,
+            url: '',
+            base64: undefined
+          })),
+          images: (cleaned.images || []).map((im: any) => ({
+            ...im,
+            url: typeof im.url === 'string' && im.url.length > 40000 ? '' : im.url
+          }))
+        });
+        const reflectionRef = doc(db, 'users', effectiveUserId, 'reflections', reflection.id);
+        await setDoc(reflectionRef, leanPayload, { merge: true });
+        return { success: true, id: reflection.id };
+      } catch (retryErr) {
+        console.error('Lean cloud sync retry notice:', retryErr);
+        // Fall back gracefully - the user's data is already safely stored locally
+        return { success: true, id: reflection.id, isLocalFallback: true };
+      }
+    }
+
     if (isQuotaExceededError(err)) {
       setQuotaExceededState(true);
       console.warn('Daily write quota reached. Reflection saved safely to local storage.');
@@ -414,6 +515,18 @@ export async function saveReflection(
         error: 'Firestore daily write quota reached. Saved safely to your device.' 
       };
     }
+
+    // If permission error occurred because user logged out or session expired
+    if (errMsg.includes('Missing or insufficient permissions')) {
+      console.warn('Firestore permission check failed. Data saved safely to local device.');
+      return {
+        success: true,
+        id: reflection.id,
+        isLocalFallback: true,
+        error: 'Cloud sync paused. Saved safely to your device.'
+      };
+    }
+
     console.error('Firestore saveReflection error:', err);
     return { 
       success: false, 
@@ -454,9 +567,33 @@ export function subscribeUserReflections(
     return onSnapshot(
       q,
       (snapshot) => {
+        const localCurrent = getLocalReflections(userId);
         const results: JournalReflection[] = [];
         snapshot.forEach((docSnap) => {
-          results.push(docSnap.data() as JournalReflection);
+          const cloudDoc = docSnap.data() as JournalReflection;
+          // Merge local audio and full-fidelity media if cloud document pruned them for 1MB limits
+          const localMatch = localCurrent.find(l => l.id === cloudDoc.id);
+          if (localMatch) {
+            if (localMatch.audioNotes && localMatch.audioNotes.length > 0) {
+              cloudDoc.audioNotes = cloudDoc.audioNotes?.map(an => {
+                const localAn = localMatch.audioNotes?.find(l => l.id === an.id);
+                return {
+                  ...an,
+                  url: an.url || localAn?.url || ''
+                };
+              }) || localMatch.audioNotes;
+            }
+            if (localMatch.images && localMatch.images.length > 0) {
+              cloudDoc.images = cloudDoc.images?.map(im => {
+                const localIm = localMatch.images?.find(l => l.id === im.id);
+                return {
+                  ...im,
+                  url: (im.url && im.url.length > 50) ? im.url : (localIm?.url || im.url)
+                };
+              }) || localMatch.images;
+            }
+          }
+          results.push(cloudDoc);
         });
 
         // Merge with local items if local has newer entries
@@ -522,7 +659,9 @@ export async function saveScrapbook(
   userId: string,
   scrapbook: Scrapbook
 ): Promise<{ success: boolean; id: string; error?: string; isLocalFallback?: boolean }> {
-  if (!userId) {
+  const effectiveUserId = (auth.currentUser && auth.currentUser.uid) ? auth.currentUser.uid : userId;
+
+  if (!effectiveUserId) {
     return { success: false, id: scrapbook.id, error: 'Authentication required: Missing userId' };
   }
   if (!scrapbook.id) {
@@ -531,12 +670,12 @@ export async function saveScrapbook(
 
   const cleaned = cleanPayload({
     ...scrapbook,
-    userId,
+    userId: effectiveUserId,
     updatedAt: Date.now()
   });
 
   // 1. Always save to local storage first (instant durability)
-  saveLocalScrapbookItem(userId, cleaned);
+  saveLocalScrapbookItem(effectiveUserId, cleaned);
 
   // 2. If quota is already exhausted or unauthenticated guest mode, skip cloud call
   if (isDailyQuotaExceeded || !auth.currentUser) {
@@ -544,10 +683,15 @@ export async function saveScrapbook(
   }
 
   try {
-    const scrapbookRef = doc(db, 'users', userId, 'scrapbooks', scrapbook.id);
+    const scrapbookRef = doc(db, 'users', effectiveUserId, 'scrapbooks', scrapbook.id);
     await setDoc(scrapbookRef, cleaned, { merge: true });
     return { success: true, id: scrapbook.id };
   } catch (err: any) {
+    const errMsg = err?.message || String(err);
+    if (errMsg.includes('exceeds the maximum allowed size') || errMsg.includes('1,048,576 bytes')) {
+      console.warn('Scrapbook exceeds 1MB limit for cloud sync. Saved locally.');
+      return { success: true, id: scrapbook.id, isLocalFallback: true };
+    }
     if (isQuotaExceededError(err)) {
       setQuotaExceededState(true);
       console.warn('Daily write quota reached. Scrapbook saved safely to local storage.');
@@ -557,6 +701,10 @@ export async function saveScrapbook(
         isLocalFallback: true, 
         error: 'Firestore daily write quota reached. Saved safely to your device.' 
       };
+    }
+    if (errMsg.includes('Missing or insufficient permissions')) {
+      console.warn('Firestore permission check failed for scrapbook. Saved safely to local device.');
+      return { success: true, id: scrapbook.id, isLocalFallback: true };
     }
     console.error('Firestore saveScrapbook error:', err);
     return {

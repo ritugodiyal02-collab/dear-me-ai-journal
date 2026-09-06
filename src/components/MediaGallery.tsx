@@ -12,9 +12,9 @@ interface MediaGalleryProps {
 
 /**
  * Optimizes an uploaded image via HTML Canvas to avoid storing massive raw files
- * while preserving high fidelity and fast rendering.
+ * while preserving high fidelity, crisp polaroid rendering, and staying well under Firestore limits.
  */
-export async function compressImageFile(file: File, maxDimension: number = 1200): Promise<{ base64: string; mimeType: string }> {
+export async function compressImageFile(file: File, maxDimension: number = 800): Promise<{ base64: string; mimeType: string }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -36,16 +36,36 @@ export async function compressImageFile(file: File, maxDimension: number = 1200)
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          resolve({ base64: e.target?.result as string, mimeType: file.type });
+          resolve({ base64: e.target?.result as string, mimeType: 'image/jpeg' });
           return;
         }
 
+        // Fill background with white for transparency compatibility
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
-        const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-        const base64 = canvas.toDataURL(mimeType, 0.85);
-        resolve({ base64, mimeType });
+
+        // Always convert to compressed JPEG (PNG ignores quality in canvas and creates multi-megabyte payloads)
+        let base64 = canvas.toDataURL('image/jpeg', 0.72);
+
+        // Defensive second-pass downscaling if still over 120KB
+        if (base64.length > 160000 && (width > 500 || height > 500)) {
+          const smallCanvas = document.createElement('canvas');
+          const scale = 0.7;
+          smallCanvas.width = Math.round(width * scale);
+          smallCanvas.height = Math.round(height * scale);
+          const sCtx = smallCanvas.getContext('2d');
+          if (sCtx) {
+            sCtx.fillStyle = '#FFFFFF';
+            sCtx.fillRect(0, 0, smallCanvas.width, smallCanvas.height);
+            sCtx.drawImage(canvas, 0, 0, smallCanvas.width, smallCanvas.height);
+            base64 = smallCanvas.toDataURL('image/jpeg', 0.65);
+          }
+        }
+
+        resolve({ base64, mimeType: 'image/jpeg' });
       };
-      img.onerror = () => resolve({ base64: e.target?.result as string, mimeType: file.type });
+      img.onerror = () => resolve({ base64: e.target?.result as string, mimeType: 'image/jpeg' });
       img.src = e.target?.result as string;
     };
     reader.onerror = (err) => reject(err);

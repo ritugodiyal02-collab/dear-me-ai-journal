@@ -4,7 +4,8 @@ import {
   signInWithGoogle, 
   signInAsGuest,
   signOutUser, 
-  onAuthStateChanged, 
+  onAuthStateChanged,
+  getRedirectResult,
   FirebaseUser 
 } from '../lib/firebase';
 import { syncUserProfile } from '../lib/firestoreService';
@@ -34,6 +35,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isGuest, setIsGuest] = useState(false);
 
   useEffect(() => {
+    // Check if user is returning from a redirect login
+    getRedirectResult(auth).then(async (result) => {
+      if (result?.user) {
+        const user = result.user;
+        const profile: UserProfile = {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName || user.email?.split('@')[0] || 'Explorer',
+          photoURL: user.photoURL,
+          lastLoginAt: Date.now(),
+        };
+        setFirebaseUser(user);
+        setCurrentUser(profile);
+        setIsGuest(false);
+        localStorage.removeItem('craft_guest_session');
+        await syncUserProfile(profile);
+      }
+    }).catch((err) => {
+      console.warn('Redirect sign-in notice:', err);
+    });
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setLoading(true);
       if (user) {
@@ -94,7 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const profile: UserProfile = {
         uid: user.uid,
         email: user.email,
-        displayName: user.displayName || user.email?.split('@')[0] || 'Ritu',
+        displayName: user.displayName || user.email?.split('@')[0] || 'Explorer',
         photoURL: user.photoURL,
         lastLoginAt: Date.now(),
       };
@@ -110,30 +132,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
       if (isUnauthorizedDomain) {
         const domain = typeof window !== 'undefined' ? window.location.hostname : 'current domain';
-        console.warn(`[Auth Notice] Firebase domain "${domain}" requires authorized domains setup in Firebase Console. Seamlessly entering Local Sanctuary mode.`);
+        console.warn(`[Auth Notice] Firebase domain "${domain}" requires authorized domains setup in Firebase Console.`);
         setUnauthorizedDomain(domain);
+        return;
+      }
 
-        // Transition immediately into local sanctuary so user is not blocked
-        let guestUid = localStorage.getItem('craft_guest_uid');
-        if (!guestUid) {
-          guestUid = `guest_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-          localStorage.setItem('craft_guest_uid', guestUid);
-        }
-        const profile: UserProfile = {
-          uid: guestUid,
-          email: 'ritugodiyal04@gmail.com',
-          displayName: 'Ritu',
-          photoURL: null,
-          lastLoginAt: Date.now()
-        };
-        setCurrentUser(profile);
-        setIsGuest(true);
-        localStorage.setItem('craft_guest_session', 'true');
+      if (err?.code === 'auth/popup-blocked') {
+        setError('The sign-in popup was blocked by your browser. Please allow popups for this site, or explore as a guest below.');
+        return;
+      }
+
+      if (err?.code === 'auth/popup-closed-by-user') {
+        setError('Sign-in popup was closed before completing. Click again to sign in or explore as guest.');
+        return;
+      }
+
+      if (err?.code === 'auth/network-request-failed') {
+        setError('Network error during authentication. Check your internet connection or explore as guest.');
         return;
       }
 
       console.warn('Sign-in cancelled or interrupted:', err?.message || err);
-      setError(err?.message || 'Google sign-in could not be completed');
+      setError(err?.message || 'Google sign-in could not be completed. You can continue as guest below.');
     }
   };
 
@@ -185,6 +205,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUnauthorizedDomain(null);
     try {
       localStorage.removeItem('craft_guest_session');
+      localStorage.removeItem('craft_guest_uid');
       await signOutUser();
       setCurrentUser(null);
       setFirebaseUser(null);

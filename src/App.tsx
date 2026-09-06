@@ -781,7 +781,7 @@ function MainApp() {
               {isRetryingSync ? 'Testing...' : 'Retry Sync'}
             </button>
             <a
-              href="https://console.firebase.google.com/project/gen-lang-client-0187697001/firestore/databases/ai-studio-5b5a8fd6-3891-4381-aa57-8d42c72151b9/data?openUpgradeDialog=true"
+              href="https://console.firebase.google.com/project/dearme-da2e5/firestore"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 font-semibold text-amber-950 hover:text-amber-800 underline transition-colors"

@@ -1,24 +1,35 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // User root document isolation
+    // User root document isolated strictly to the authenticated owner
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
 
-      // User isolated reflections & journal entries
+      // User's journal reflections collection
       match /reflections/{reflectionId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
 
-      // User isolated scrapbooks & story memories
+      // User's interactions collection (AI companion exchanges)
+      match /interactions/{interactionId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // User's scrapbooks collection
       match /scrapbooks/{scrapbookId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
 
-      // User isolated interactions
-      match /interactions/{interactionId} {
+      // User's system metadata and connection ping collection
+      match /system/{systemDocId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
+
+    // Default deny for all other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }
+

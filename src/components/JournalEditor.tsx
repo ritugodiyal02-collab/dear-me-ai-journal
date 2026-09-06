@@ -339,7 +339,7 @@ export function JournalEditor({
   const handleSaveDocument = async (override?: Partial<JournalReflection>) => {
     const updated: JournalReflection = {
       id: reflection.id,
-      userId: reflection.userId || userId,
+      userId: userId || reflection.userId || 'user',
       title: title.trim() || 'Untitled Reflection',
       content: content || '',
       mode: mode || 'reflect',

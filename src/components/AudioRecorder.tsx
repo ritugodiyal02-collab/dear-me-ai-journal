@@ -73,10 +73,10 @@ export function AudioRecorder({
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      // Configure MediaRecorder with voice-optimized bitrate to keep Firestore payloads compact and fast
+      // Configure MediaRecorder with voice-optimized bitrate to keep payloads compact and fast
       let mediaRecorder: MediaRecorder;
       try {
-        mediaRecorder = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
+        mediaRecorder = new MediaRecorder(stream, { audioBitsPerSecond: 16000 });
       } catch {
         mediaRecorder = new MediaRecorder(stream);
       }
@@ -107,7 +107,6 @@ export function AudioRecorder({
           const newNote: AudioNote = {
             id: noteId,
             url: base64Audio,
-            base64: base64Audio,
             duration: elapsedSeconds,
             createdAt: Date.now(),
             isTranscribing: true
@@ -156,7 +155,6 @@ export function AudioRecorder({
       const newNote: AudioNote = {
         id: noteId,
         url: base64Audio,
-        base64: base64Audio,
         duration: 30, // Default estimate for uploaded tracks
         createdAt: Date.now(),
         isTranscribing: true
